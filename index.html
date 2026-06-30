@@ -440,6 +440,9 @@ table{width:100%;border-collapse:collapse}
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <!-- pdf.js — used only by the Zakat module to read uploaded bank statement PDFs client-side -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
 </head>
 <body>
 
@@ -484,21 +487,20 @@ table{width:100%;border-collapse:collapse}
         <div class="nav-group">Workspace</div>
         <a data-view="dashboard"><span class="ic" data-i="grid"></span> Dashboard</a>
         <a data-view="items"><span class="ic" data-i="box"></span> Products</a>
-        <a data-view="stock"><span class="ic" data-i="layers"></span> Stock</a>
+        <a data-view="stock" data-feature="stock"><span class="ic" data-i="layers"></span> Stock <span class="lock" data-lock data-feature-lock="stock">PRO</span></a>
         <a data-view="customers"><span class="ic" data-i="users"></span> Customers</a>
         <a data-view="pos"><span class="ic" data-i="pos"></span> POS</a>
         <a data-view="employees"><span class="ic" data-i="badge"></span> Employees</a>
         <div class="nav-group">Finance</div>
-        <a data-view="expenses"><span class="ic" data-i="wallet"></span> Expenses</a>
-        <a data-view="zakat"><span class="ic" data-i="moon"></span> Zakat ☪</a>
-        <a data-view="zakat"><span class="ic" data-i="moon"></span> Zakat</a>
+        <a data-view="expenses" data-feature="expenses"><span class="ic" data-i="wallet"></span> Expenses <span class="lock" data-lock data-feature-lock="expenses">PRO</span></a>
+        <a data-view="zakat" data-feature="zakat"><span class="ic" data-i="moon"></span> Zakat ☪ <span class="lock" data-lock data-feature-lock="zakat">PRO</span></a>
         <div class="nav-group">Sales</div>
         <a data-view="quotations"><span class="ic" data-i="doc"></span> Quotations</a>
         <a data-view="invoices"><span class="ic" data-i="receipt"></span> Invoices</a>
         <div class="nav-group">Operations <span class="badge pro" style="font-size:9px">PRO</span></div>
-        <a data-view="deliveries"><span class="ic" data-i="truck"></span> Deliveries <span class="lock" data-lock>PRO</span></a>
-        <a data-view="email"><span class="ic" data-i="mail"></span> Email <span class="lock" data-lock>PRO</span></a>
-        <a data-view="team"><span class="ic" data-i="team"></span> Team access <span class="lock" data-lock>PRO</span></a>
+        <a data-view="deliveries" data-feature="deliveries"><span class="ic" data-i="truck"></span> Deliveries <span class="lock" data-lock data-feature-lock="deliveries">PRO</span></a>
+        <a data-view="email" data-feature="email"><span class="ic" data-i="mail"></span> Email <span class="lock" data-lock data-feature-lock="email">PRO</span></a>
+        <a data-view="team" data-feature="team"><span class="ic" data-i="team"></span> Team access <span class="lock" data-lock data-feature-lock="team">PRO</span></a>
         <div class="nav-group">Account</div>
         <a data-view="settings"><span class="ic" data-i="gear"></span> Settings</a>
         <div class="nav-group" id="adminGroup" style="display:none">Superadmin</div>
@@ -539,8 +541,7 @@ table{width:100%;border-collapse:collapse}
 <script>
 /* ============================================================
    QuoteMaster — front-end app.
-   Data layer (DB) is intentionally isolated so it can be swapped
-   for the Google Apps Script backend (see api() calls below).
+   Data layer is Firebase (Auth + Firestore) — see DATA LAYER block below.
    ============================================================ */
 
 /* ---------- tiny icon set ---------- */
@@ -586,14 +587,14 @@ function svg(name,w=16){return `<svg viewBox="0 0 24 24" width="${w}" height="${
    ► No backend deployment ever needed.
    ============================================================ */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD5NPIUGMbs8qQfU-PekQMMT2EWDzNBj-4",
-  authDomain: "quote-master-eed65.firebaseapp.com",
-  projectId: "quote-master-eed65",
-  storageBucket: "quote-master-eed65.firebasestorage.app",
-  messagingSenderId: "530335083320",
-  appId: "1:530335083320:web:9828da5df710ce26ae6fcd"
+  apiKey:            "PASTE_YOUR_API_KEY",
+  authDomain:        "PASTE_YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "PASTE_YOUR_PROJECT_ID",
+  storageBucket:     "PASTE_YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "PASTE_YOUR_SENDER_ID",
+  appId:             "PASTE_YOUR_APP_ID"
 };
-const ADMIN_EMAIL = "vaddever@gmail.com";
+const ADMIN_EMAIL = "PASTE_YOUR_ADMIN_EMAIL";
 const TRIAL_DAYS  = 30;
 
 firebase.initializeApp(FIREBASE_CONFIG);
@@ -641,9 +642,10 @@ function computeDaysLeft(pi) {
 }
 async function loadFirebaseUser(user) {
   try {
-    const [bizSnap, planSnap] = await Promise.all([
+    const [bizSnap, planSnap, cfgSnap] = await Promise.all([
       _fdb.collection('businesses').doc(user.uid).get(),
-      _fdb.collection('plan_info').doc(user.uid).get()
+      _fdb.collection('plan_info').doc(user.uid).get(),
+      _fdb.collection('platform_config').doc('settings').get().catch(()=>null)
     ]);
     State.db = bizSnap.exists ? bizSnap.data() : starterDb(user.displayName||'', user.email);
     const pi = planSnap.exists ? planSnap.data() : null;
@@ -651,6 +653,7 @@ async function loadFirebaseUser(user) {
     State.trialDaysLeft = computeDaysLeft(pi);
     State.isAdmin = (user.email||'').toLowerCase() === ADMIN_EMAIL.toLowerCase();
     State.user = { email: user.email, uid: user.uid };
+    _platformCfg = (cfgSnap && cfgSnap.exists) ? cfgSnap.data() : {};
     document.getElementById('auth').style.display = 'none';
     document.getElementById('app').style.display  = 'flex';
     launchApp();
@@ -675,8 +678,17 @@ function fbErrMsg(e) {
 }
 
 let State={user:null,db:null,view:'dashboard',isAdmin:false,trialDaysLeft:0};
+let _platformCfg={};
 
 function isPro(){ const p=State.db?.settings?.plan; return p==='pro'||p==='trial'; }
+
+/* Which features require Pro by default, until admin overrides via Portal Admin
+   → Platform Settings → Pro Feature Configuration. true = Pro-only, false = free for everyone. */
+const DEFAULT_PRO_FEATURES={
+  stock:false, deliveries:true, email:true, team:true, expenses:true, zakat:false, multiEmployee:true
+};
+function proFeatures(){ return Object.assign({},DEFAULT_PRO_FEATURES,_platformCfg.proFeatures||{}); }
+function featureLocked(key){ return !!proFeatures()[key] && !isPro(); }
 
 function blankDB(biz){
   return {
@@ -832,7 +844,10 @@ function refreshChrome(){
   document.getElementById('planName').textContent=plan==='pro'?'Pro':plan==='trial'?`Trial (${State.trialDaysLeft} days left)`:'Free';
   document.getElementById('upgradeBtn').style.display=plan==='pro'?'none':'block';
   document.getElementById('upgradeBtn').textContent=plan==='trial'?'Upgrade to Pro':'Upgrade to Pro';
-  document.querySelectorAll('[data-lock]').forEach(l=>l.style.display=proAccess?'none':'inline-block');
+  document.querySelectorAll('[data-feature-lock]').forEach(l=>{
+    const key=l.dataset.featureLock;
+    l.style.display=featureLocked(key)?'inline-block':'none';
+  });
   document.getElementById('adminGroup').style.display=State.isAdmin?'block':'none';
   document.getElementById('adminLink').style.display=State.isAdmin?'flex':'none';
 }
@@ -841,7 +856,7 @@ document.getElementById('upgradeBtn').onclick=openUpgrade;
 /* ============================================================
    ROUTER
    ============================================================ */
-const PRO_VIEWS=['deliveries','email','team','expenses'];
+const VIEW_FEATURE_MAP={stock:'stock',deliveries:'deliveries',email:'email',team:'team',expenses:'expenses',zakat:'zakat'};
 const TITLES={dashboard:'Dashboard',items:'Products',stock:'Stock',customers:'Customers',pos:'Point of Sale',employees:'Employees',expenses:'Expenses',zakat:'Zakat Calculator',quotations:'Quotations',invoices:'Invoices',deliveries:'Deliveries',email:'Email',team:'Team Access',settings:'Settings',admin:'Portal Admin'};
 function go(view){
   if(view==='admin'&&!State.isAdmin){view='dashboard';}
@@ -849,7 +864,8 @@ function go(view){
   document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===view));
   document.getElementById('pageTitle').textContent=TITLES[view];
   const c=document.getElementById('content');
-  if(PRO_VIEWS.includes(view)&&!isPro()){c.innerHTML=lockedView(view);renderIcons(c);return;}
+  const fkey=VIEW_FEATURE_MAP[view];
+  if(fkey&&featureLocked(fkey)){c.innerHTML=lockedView(view);renderIcons(c);return;}
   ({dashboard:viewDashboard,items:viewItems,stock:viewStock,customers:viewCustomers,pos:viewPOS,employees:viewEmployees,expenses:viewExpenses,zakat:viewZakat,quotations:()=>viewDocs('quote'),invoices:()=>viewDocs('invoice'),deliveries:viewDeliveries,email:viewEmail,team:viewTeam,settings:viewSettings,admin:viewAdmin}[view])();
   renderIcons(c);
 }
@@ -1004,11 +1020,9 @@ function viewDashboard(){
    </div>
    <div class="card" style="padding:12px 18px;margin-bottom:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;border-left:3px solid var(--accent)">
      <div class="inv-stat"><div class="lbl">Inventory cost value</div><div class="val">${money(invCost)}</div></div>
-     <div style="width:1px;background:var(--line);margin:0 20px"></div>
      <div class="inv-stat"><div class="lbl">Inventory sell value</div><div class="val">${money(invSell)}</div></div>
-     <div style="width:1px;background:var(--line);margin:0 20px"></div>
      <div class="inv-stat"><div class="lbl">Unrealised profit</div><div class="val" style="color:var(--accent-ink)">${money(invSell-invCost)}</div></div>
-     ${lowStock?`<div style="width:1px;background:var(--line);margin:0 20px"></div><div class="inv-stat"><div class="lbl">Low stock alerts</div><div class="val" style="color:var(--amber)">${lowStock} items</div></div>`:''}
+     ${lowStock?`<div class="inv-stat"><div class="lbl">Low stock alerts</div><div class="val" style="color:var(--amber)">${lowStock} items</div></div>`:''}
      <div style="margin-left:auto;align-self:center"><button class="btn ghost sm" onclick="go('stock')">View stock →</button></div>
    </div>
    <div class="grid two-col" style="gap:14px;margin-bottom:18px">
@@ -1687,7 +1701,7 @@ function saveDelivery(){
   else{State.db.deliveries.push(d);State.db.counters.delivery++;}
   persist();closeModal();viewDeliveries();toast('Delivery note saved');
 }
-function deliveryFromInvoice(invId){if(!isPro()){openUpgrade();return;}
+function deliveryFromInvoice(invId){if(featureLocked('deliveries')){openUpgrade();return;}
   const inv=State.db.invoices.find(i=>i.id===invId);const d=newDoc('delivery',State.db);
   d.invoiceId=inv.id;d.customer={name:inv.customer.name,address:inv.customer.address||''};
   d.lineItems=inv.lineItems.map(l=>({qty:l.qty,name:l.name}));
@@ -1736,14 +1750,14 @@ function viewEmail(){
   renderIcons(host);
 }
 function emailDoc(type,id){
-  if(!isPro()){toast('Emailing documents is a Pro feature');openUpgrade();return;}
+  if(featureLocked('email')){toast('Emailing documents is a Pro feature');openUpgrade();return;}
   const coll=type==='quote'?State.db.quotations:State.db.invoices;const d=coll.find(x=>x.id===id);
   composeEmail({to:d.customer.email||'',subject:`${type==='quote'?'Quotation':'Invoice'} ${d.number} from ${State.db.settings.businessName}`,
     body:`Dear ${d.customer.name||'Customer'},\n\nPlease find attached ${type==='quote'?'our quotation':'invoice'} ${d.number} for ${money(d.totals.total)}.\n\n${type==='quote'?State.db.settings.quoteFooter:State.db.settings.invoiceFooter}\n\nRegards,\n${State.db.settings.businessName}`,
     attach:d.number+'.pdf', docHtml:buildDocHtml(type,d)});
 }
 function composeEmail(pre={}){
-  if(!isPro()){openUpgrade();return;}
+  if(featureLocked('email')){openUpgrade();return;}
   openModal('Compose email',`
     <div class="field"><label>To</label><input id="em_to" value="${esc(pre.to||'')}" placeholder="customer@email.com"></div>
     <div class="field"><label>Subject</label><input id="em_subj" value="${esc(pre.subject||'')}"></div>
@@ -1909,6 +1923,7 @@ function zkCalc(rec) {
 /* ---- current edit record (used by calculator form) ---- */
 var _zkRec    = {};
 var _zkEditId = null;
+var _zkBankEntries = []; // [{date:'YYYY-MM-DD', balance:Number}] parsed from uploaded PDF statement
 
 /* ---- main list view ---- */
 function viewZakat() {
@@ -2037,6 +2052,250 @@ function zkInputRow(label, id, hint, oninput) {
     (hint ? '<div class="muted" style="font-size:12px;margin-top:3px">' + hint + '</div>' : '') +
     '</div>';
 }
+/* ============================================================
+   ZAKAT — Bank Statement (PDF) import
+   Client-side PDF text extraction (pdf.js) + heuristic parsing
+   of date + running-balance pairs, so the user can pick a
+   balance for any date or date range and apply it to the
+   "Bank balance" field used in the zakat calculation.
+   ============================================================ */
+
+function zkBankSectionHtml() {
+  var hasEntries = _zkBankEntries.length > 0;
+  return '<div class="zk-sec" id="zk_bankSec">' +
+    '<h4>&#127974; Bank Statement (PDF) <span class="auto-tag" style="background:var(--paper);color:var(--ink-soft)">optional</span></h4>' +
+    '<p class="muted" style="font-size:12.5px;margin-bottom:10px">' +
+      'Upload a bank statement PDF to automatically detect your balance on any date. ' +
+      'Useful for finding the balance on your zakat anniversary, or the lowest balance ' +
+      'held during the year (the more cautious method some scholars recommend).' +
+    '</p>' +
+    '<input type="file" id="zk_bankFile" accept="application/pdf" onchange="zkHandleBankPdf(this)" ' +
+      'style="font-size:13px">' +
+    '<div id="zk_bankStatus" class="muted" style="font-size:12.5px;margin-top:8px">' +
+      (hasEntries ? '' : '') +
+    '</div>' +
+    '<div id="zk_bankResults"></div>' +
+  '</div>';
+}
+
+/* ---- read PDF, preserving rough line structure via Y-position grouping ---- */
+async function zkExtractPdfLines(pdf) {
+  var lines = [];
+  for (var p = 1; p <= pdf.numPages; p++) {
+    var page = await pdf.getPage(p);
+    var content = await page.getTextContent();
+    var byY = {};
+    content.items.forEach(function(it) {
+      var y = Math.round(it.transform[5]);
+      if (!byY[y]) byY[y] = [];
+      byY[y].push({ x: it.transform[4], str: it.str });
+    });
+    var ys = Object.keys(byY).map(Number).sort(function(a, b) { return b - a; });
+    ys.forEach(function(y) {
+      var row = byY[y]
+        .sort(function(a, b) { return a.x - b.x; })
+        .map(function(o) { return o.str; })
+        .join(' ');
+      if (row.trim()) lines.push(row);
+    });
+  }
+  return lines;
+}
+
+/* ---- month-name lookup for "05 Jan 2026" style dates ---- */
+var ZK_MONTHS = {
+  jan:0, feb:1, mar:2, apr:3, may:4, jun:5,
+  jul:6, aug:7, sep:8, oct:9, nov:10, dec:11
+};
+function zkPad(n) { return n < 10 ? '0' + n : '' + n; }
+
+/* ---- try to find one date in a line of text; returns {iso, matchedStr} or null ---- */
+function zkFindDate(line) {
+  var m;
+  // dd/mm/yyyy or dd-mm-yyyy or dd.mm.yyyy
+  m = line.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\b/);
+  if (m) {
+    var d = +m[1], mo = +m[2], y = +m[3];
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      return { iso: y + '-' + zkPad(mo) + '-' + zkPad(d), matched: m[0] };
+    }
+  }
+  // yyyy-mm-dd
+  m = line.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if (m) {
+    return { iso: m[1] + '-' + zkPad(+m[2]) + '-' + zkPad(+m[3]), matched: m[0] };
+  }
+  // dd MMM yyyy  /  dd-MMM-yyyy  (e.g. 05 Jan 2026, 05-Jan-2026)
+  m = line.match(/\b(\d{1,2})[\s\-]([A-Za-z]{3,9})[\s\-](\d{4})\b/);
+  if (m) {
+    var mon = ZK_MONTHS[m[2].toLowerCase().slice(0,3)];
+    if (mon !== undefined) {
+      return { iso: m[3] + '-' + zkPad(mon+1) + '-' + zkPad(+m[1]), matched: m[0] };
+    }
+  }
+  return null;
+}
+
+/* ---- find the last plausible currency number in a line (after removing the date) ---- */
+function zkFindLastNumber(line) {
+  var nums = line.match(/-?\(?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?\)?/g);
+  if (!nums || !nums.length) return null;
+  var last = nums[nums.length - 1];
+  var neg = /^\(.*\)$/.test(last);
+  var clean = last.replace(/[(),]/g, '');
+  var val = parseFloat(clean);
+  if (isNaN(val)) return null;
+  return neg ? -val : val;
+}
+
+/* ---- parse extracted lines into [{date, balance}] sorted ascending ---- */
+function zkParseBankLines(lines) {
+  var out = [];
+  lines.forEach(function(line) {
+    var dateInfo = zkFindDate(line);
+    if (!dateInfo) return;
+    var rest = line.replace(dateInfo.matched, '');
+    var bal = zkFindLastNumber(rest);
+    if (bal === null) return;
+    out.push({ date: dateInfo.iso, balance: bal });
+  });
+  out.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  return out;
+}
+
+/* ---- main handler: read file → pdf.js → parse → render ---- */
+async function zkHandleBankPdf(inputEl) {
+  var file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  var statusEl = document.getElementById('zk_bankStatus');
+  var resultsEl = document.getElementById('zk_bankResults');
+  statusEl.textContent = 'Reading PDF…';
+  resultsEl.innerHTML = '';
+  if (!window.pdfjsLib) {
+    statusEl.innerHTML = '&#9888; PDF reader did not load. Check your internet connection and try again.';
+    return;
+  }
+  try {
+    var buf = await file.arrayBuffer();
+    var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    var lines = await zkExtractPdfLines(pdf);
+    var entries = zkParseBankLines(lines);
+    if (!entries.length) {
+      statusEl.innerHTML = '&#9888; Could not automatically detect date/balance rows in this PDF. ' +
+        'Different banks format statements differently — you can still enter the bank balance manually above.';
+      return;
+    }
+    _zkBankEntries = entries;
+    statusEl.innerHTML = '&#10003; Detected <b>' + entries.length + '</b> balance entries from ' +
+      fmtDate(entries[0].date) + ' to ' + fmtDate(entries[entries.length-1].date) + '.';
+    zkRenderBankResults();
+  } catch(e) {
+    statusEl.textContent = 'Could not read this PDF: ' + e.message;
+  }
+}
+
+/* ---- compute a snapshot balance for a method + date range ---- */
+function zkComputeSnapshot(method, startIso, endIso) {
+  var inRange = _zkBankEntries.filter(function(e) {
+    return e.date >= startIso && e.date <= endIso;
+  });
+  if (!inRange.length) return null;
+  if (method === 'lowest') {
+    return inRange.reduce(function(min, e) { return e.balance < min.balance ? e : min; }, inRange[0]);
+  }
+  if (method === 'highest') {
+    return inRange.reduce(function(max, e) { return e.balance > max.balance ? e : max; }, inRange[0]);
+  }
+  if (method === 'avg') {
+    var sum = inRange.reduce(function(s, e) { return s + e.balance; }, 0);
+    return { date: null, balance: +(sum / inRange.length).toFixed(2) };
+  }
+  // 'closing' (default): last entry on or before the end date
+  return inRange[inRange.length - 1];
+}
+
+/* ---- render the results panel: date range, method selector, preview table ---- */
+function zkRenderBankResults() {
+  var host = document.getElementById('zk_bankResults');
+  if (!host || !_zkBankEntries.length) return;
+  var minDate = _zkBankEntries[0].date;
+  var maxDate = _zkBankEntries[_zkBankEntries.length - 1].date;
+
+  var rangeHtml =
+    '<div class="fgrid" style="margin-top:10px">' +
+      '<div class="field"><label>From date</label>' +
+        '<input type="date" id="zk_bankStart" value="' + minDate + '" min="' + minDate + '" max="' + maxDate + '" oninput="zkUpdateBankPreview()"></div>' +
+      '<div class="field"><label>To date (zakat anniversary)</label>' +
+        '<input type="date" id="zk_bankEnd" value="' + maxDate + '" min="' + minDate + '" max="' + maxDate + '" oninput="zkUpdateBankPreview()"></div>' +
+      '<div class="field full"><label>Snapshot method</label>' +
+        '<select id="zk_bankMethod" onchange="zkUpdateBankPreview()">' +
+          '<option value="closing">Closing balance on end date — standard</option>' +
+          '<option value="lowest">Lowest balance in range — most cautious</option>' +
+          '<option value="highest">Highest balance in range</option>' +
+          '<option value="avg">Average balance in range (informational only)</option>' +
+        '</select></div>' +
+    '</div>' +
+    '<div id="zk_bankPreview" style="margin-top:10px"></div>' +
+    '<button class="btn accent sm" style="margin-top:8px" onclick="zkApplyBankBalance()">Apply to Bank balance</button>';
+
+  // preview table: first 4, ..., last 4 rows if long
+  var rows = _zkBankEntries;
+  var showRows = rows.length <= 10 ? rows : rows.slice(0, 4).concat(rows.slice(-4));
+  var tableRows = '';
+  showRows.forEach(function(e, i) {
+    if (rows.length > 10 && i === 4) {
+      tableRows += '<tr><td colspan="2" class="muted" style="text-align:center;font-size:12px">&middot;&middot;&middot; ' +
+        (rows.length - 8) + ' more rows &middot;&middot;&middot;</td></tr>';
+    }
+    tableRows += '<tr><td class="mono" style="font-size:12.5px">' + fmtDate(e.date) + '</td>' +
+      '<td class="right mono" style="font-size:12.5px">' + money(e.balance) + '</td></tr>';
+  });
+  var tableHtml =
+    '<div class="tbl" style="margin-top:12px;max-height:220px;overflow-y:auto">' +
+      '<table><thead><tr><th>Date</th><th class="right">Balance detected</th></tr></thead>' +
+      '<tbody>' + tableRows + '</tbody></table>' +
+    '</div>';
+
+  host.innerHTML = rangeHtml + tableHtml;
+  zkUpdateBankPreview();
+}
+
+function zkUpdateBankPreview() {
+  var startEl = document.getElementById('zk_bankStart');
+  var endEl   = document.getElementById('zk_bankEnd');
+  var methEl  = document.getElementById('zk_bankMethod');
+  var prevEl  = document.getElementById('zk_bankPreview');
+  if (!startEl || !endEl || !methEl || !prevEl) return;
+  var snap = zkComputeSnapshot(methEl.value, startEl.value, endEl.value);
+  if (!snap) {
+    prevEl.innerHTML = '<div class="muted" style="font-size:12.5px">No entries in this date range.</div>';
+    return;
+  }
+  var dateNote = snap.date ? ' &middot; entry dated ' + fmtDate(snap.date) : ' &middot; average across range';
+  prevEl.innerHTML =
+    '<div style="padding:10px 12px;border:1.5px solid var(--accent);border-radius:10px;background:var(--accent-soft)">' +
+      '<div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.04em">Balance to apply</div>' +
+      '<div style="font-size:20px;font-weight:700;color:var(--accent-ink);font-family:\'Spline Sans Mono\',monospace">' +
+        money(snap.balance) +
+      '</div>' +
+      '<div class="muted" style="font-size:12px">' + dateNote + '</div>' +
+    '</div>';
+}
+
+function zkApplyBankBalance() {
+  var startEl = document.getElementById('zk_bankStart');
+  var endEl   = document.getElementById('zk_bankEnd');
+  var methEl  = document.getElementById('zk_bankMethod');
+  if (!startEl || !endEl || !methEl) return;
+  var snap = zkComputeSnapshot(methEl.value, startEl.value, endEl.value);
+  if (!snap) { toast('No balance entries in that date range'); return; }
+  _zkRec.bankBalance = snap.balance;
+  var bankInput = document.getElementById('zk_bank');
+  if (bankInput) bankInput.value = snap.balance;
+  zkUpdateSide();
+  toast('Bank balance set to ' + money(snap.balance));
+}
+
 function zkRenderCalc() {
   var r   = _zkRec;
   var res = zkCalc(r);
@@ -2109,6 +2368,9 @@ function zkRenderCalc() {
       '</div>' +
     '</div>';
 
+  /* --- section: bank statement PDF import --- */
+  var bankSec = zkBankSectionHtml();
+
   /* --- section: debts --- */
   var debtSec =
     '<div class="zk-sec">' +
@@ -2142,9 +2404,10 @@ function zkRenderCalc() {
   var colsCss = isMob() ? '1fr' : '1fr 340px';
   document.getElementById('content').innerHTML =
     '<div style="display:grid;grid-template-columns:' + colsCss + ';gap:16px;align-items:start">' +
-      '<div>' + metaSec + bizSec + persSec + debtSec + notesSec + btnHtml + '</div>' +
+      '<div>' + metaSec + bizSec + persSec + bankSec + debtSec + notesSec + btnHtml + '</div>' +
       '<div id="zk_side">' + sideHtml + '</div>' +
     '</div>';
+  if (_zkBankEntries.length) zkRenderBankResults();
 }
 
 /* ---- sidebar / result panel ---- */
@@ -2508,7 +2771,7 @@ function stopScan(){
 const EMP_FREE_LIMIT = 5;
 function viewEmployees(){
   const emps=State.db.employees||[];
-  const atLimit=!isPro()&&emps.length>=EMP_FREE_LIMIT;
+  const atLimit=featureLocked('multiEmployee')&&emps.length>=EMP_FREE_LIMIT;
   document.getElementById('content').innerHTML=`
    <div class="between" style="margin-bottom:16px">
      <div>
@@ -2923,13 +3186,13 @@ async function renderAdminSettings(){
     if(r&&r.ok){ _adminCfg=r.settings||{}; }
     else{
       statusHtml=`<div class="card pad" style="background:var(--amber-soft);border-color:var(--amber);margin-bottom:14px;font-size:13.5px">
-        ⚠ <b>Could not load saved settings</b> — ${esc(r?.error||'check that Code.gs is deployed as a new version')}.<br>
-        <span style="font-size:12px">Form showing defaults. Click Save to write them to the server.</span>
+        ⚠ <b>No saved settings yet</b> — ${esc(r?.error||'showing defaults')}.<br>
+        <span style="font-size:12px">Form showing defaults. Click Save to write them to Firestore.</span>
       </div>`;
     }
   }catch(e){
     statusHtml=`<div class="card pad" style="background:var(--danger-soft);border-color:var(--danger);margin-bottom:14px;font-size:13.5px">
-      ⚠ <b>Network error.</b> Make sure Code.gs is deployed as a new version with Anyone access.
+      ⚠ <b>Could not reach Firestore.</b> Check your internet connection and Firestore security rules.
     </div>`;
   }
   const c=_adminCfg;
@@ -2959,17 +3222,17 @@ async function renderAdminSettings(){
           <select id="cfg_rem" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px"><option value="1" ${c.reminderEnabled?'selected':''}>On</option><option value="0" ${!c.reminderEnabled?'selected':''}>Off</option></select></div>
         <div class="field" style="margin-top:8px"><label>Remind at (days before expiry, comma-separated)</label><input id="cfg_remdays" value="${esc((c.reminderDays||[7,3,1]).join(','))}"></div>
       </div>
-      <div class="cfg-section"><h4>Free tier limits</h4>
+      <div class="cfg-section"><h4>Pro Feature Configuration</h4>
+        <p class="muted" style="font-size:12.5px;margin-bottom:10px">Choose which features require a Pro plan. Toggle any feature to "Free" to make it available to everyone, including free-tier users.</p>
+        <div id="featToggleList" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    </div>
+    <div class="card pad" style="grid-column:1/-1">
+      <div class="cfg-section"><h4>Employee limit (free tier)</h4>
         <div class="fgrid">
           <div class="field"><label>Max employees (free tier)</label><input id="cfg_maxemp" type="number" value="${c.maxFreeEmployees||5}"></div>
           <div class="field"><label>Max products (0=unlimited)</label><input id="cfg_maxprod" type="number" value="${c.maxFreeProducts||0}"></div>
         </div>
-      </div>
-      <div class="cfg-section"><h4>Pro feature flags</h4>
-        <div class="toggle-row"><div><div style="font-weight:500">Expenses in free tier</div></div>
-          <select id="cfg_expfree" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px"><option value="0" ${!c.expensesInFree?'selected':''}>Pro only</option><option value="1" ${c.expensesInFree?'selected':''}>Free</option></select></div>
-        <div class="toggle-row"><div><div style="font-weight:500">Delivery in free tier</div></div>
-          <select id="cfg_delfree" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px"><option value="0" ${!c.deliveryInFree?'selected':''}>Pro only</option><option value="1" ${c.deliveryInFree?'selected':''}>Free</option></select></div>
       </div>
     </div>
     <div class="card pad" style="grid-column:1/-1">
@@ -2983,21 +3246,47 @@ async function renderAdminSettings(){
       <button class="btn accent" onclick="saveAdminSettings()">Save platform settings</button>
     </div>
    </div>`;
+  renderFeatureToggles();
+}
+const FEATURE_TOGGLE_DEFS=[
+  {key:'stock',       label:'Stock management & reorder alerts'},
+  {key:'multiEmployee',label:'Unlimited employees (beyond free limit)'},
+  {key:'expenses',    label:'Expense tracking'},
+  {key:'zakat',       label:'Zakat calculator'},
+  {key:'deliveries',  label:'Delivery notes'},
+  {key:'email',       label:'Email sending & inbox'},
+  {key:'team',        label:'Team portal access (multi-user)'}
+];
+function renderFeatureToggles(){
+  const host=document.getElementById('featToggleList');
+  if(!host)return;
+  const pf=Object.assign({},DEFAULT_PRO_FEATURES,_adminCfg.proFeatures||{});
+  host.innerHTML=FEATURE_TOGGLE_DEFS.map(f=>`
+    <div class="toggle-row" style="border:1px solid var(--line);border-radius:10px;padding:8px 12px">
+      <div style="font-weight:500;font-size:13.5px">${esc(f.label)}</div>
+      <select id="feat_${f.key}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;flex-shrink:0">
+        <option value="1" ${pf[f.key]?'selected':''}>Pro only</option>
+        <option value="0" ${!pf[f.key]?'selected':''}>Free for all</option>
+      </select>
+    </div>`).join('');
 }
 async function saveAdminSettings(){
+  const proFeatures={};
+  FEATURE_TOGGLE_DEFS.forEach(f=>{ proFeatures[f.key]=val('feat_'+f.key)==='1'; });
   const cfg={
     proPrice:+val('cfg_price')||299, currency:val('cfg_sym')||'Rf',
     proAnnualPrice:+val('cfg_aprx')||0, annualLabel:val('cfg_albl'),
     trialEnabled:val('cfg_trial')==='1', trialDays:+val('cfg_tdays')||14, trialRequiresCard:val('cfg_tcard')==='1',
     reminderEnabled:val('cfg_rem')==='1', reminderDays:(val('cfg_remdays')||'7,3,1').split(',').map(n=>+n.trim()).filter(Boolean),
     maxFreeEmployees:+val('cfg_maxemp')||5, maxFreeProducts:+val('cfg_maxprod')||0,
-    expensesInFree:val('cfg_expfree')==='1', deliveryInFree:val('cfg_delfree')==='1',
+    proFeatures,
     announcement:val('cfg_ann'), announcementType:val('cfg_anntype'),
     registrationClosed:val('cfg_reg')==='0'
   };
   const r={ok:true};await _fdb.collection('platform_config').doc('settings').set(cfg).catch(e=>{r.ok=false;r.error=e.message;});
   if(!r.ok)return toast(r.error||'Failed to save');
-  _adminCfg=cfg; toast('Platform settings saved');
+  _adminCfg=cfg; _platformCfg=cfg; toast('Platform settings saved — features updated for all users');
+  refreshChrome();
 }
 
 /* ============================================================
