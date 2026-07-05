@@ -154,10 +154,36 @@ table{width:100%;border-collapse:collapse}
 .fgrid .full{grid-column:1/-1}
 
 /* line items editor */
-.li-tbl th{font-size:11px}
-.li-tbl input,.li-tbl select{padding:7px 9px;border:1px solid var(--line);border-radius:8px;width:100%;background:var(--paper)}
-.li-tbl td{padding:6px 6px}
-.li-add{margin-top:8px}
+.li-card{background:var(--paper);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;transition:.15s}
+.li-card:focus-within{border-color:var(--accent)}
+.li-cat-wrap{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.li-cat-wrap select{flex:1;padding:9px 12px;border:1.5px solid var(--accent);border-radius:10px;background:var(--accent-soft);font-size:13.5px;font-weight:600;color:var(--accent-ink);cursor:pointer}
+.li-cat-wrap select:focus{outline:2px solid var(--accent);outline-offset:2px}
+.li-name-input{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--card);font-size:14px;font-family:inherit;margin-bottom:10px}
+.li-name-input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.li-nums{display:grid;grid-template-columns:70px 1fr auto auto auto;gap:8px;align-items:center}
+.li-num-field{display:flex;flex-direction:column;gap:4px}
+.li-num-field label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft)}
+.li-num-field input{padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--card);font-size:14px;font-family:'Spline Sans Mono',monospace;width:100%;text-align:right}
+.li-num-field input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.li-tax-toggle{padding:7px 12px;border-radius:9px;border:1.5px solid var(--line);background:var(--card);font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;align-self:flex-end;margin-bottom:1px}
+.li-tax-toggle.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+.li-amt{font-family:'Spline Sans Mono',monospace;font-size:15px;font-weight:700;text-align:right;align-self:flex-end;padding-bottom:2px;white-space:nowrap}
+.li-del{align-self:flex-end;margin-bottom:1px;color:var(--ink-soft)}
+.li-add-btn{width:100%;padding:11px;border:1.5px dashed var(--line);border-radius:12px;background:transparent;font-size:14px;font-weight:600;cursor:pointer;color:var(--ink-soft);display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;transition:.15s}
+.li-add-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.li-totals{margin-top:16px;display:flex;justify-content:flex-end}
+.li-tot-table{font-size:14px;min-width:260px}
+.li-tot-table td{padding:4px 0}
+.li-tot-table .li-tot-lbl{text-align:right;padding-right:20px;color:var(--ink-soft)}
+.li-tot-table .li-tot-val{text-align:right;font-family:'Spline Sans Mono',monospace;font-weight:600}
+.li-tot-table .li-grand td{padding-top:10px;font-size:17px;font-weight:700}
+.li-tot-table .li-grand .li-tot-val{color:var(--accent-ink)}
+@media(max-width:600px){
+  .li-nums{grid-template-columns:1fr 1fr auto auto}
+  .li-nums .li-amt{grid-column:1/-1;text-align:right;font-size:16px;padding-top:6px;border-top:1px solid var(--line);margin-top:2px}
+  .li-nums .li-del{grid-column:auto;align-self:flex-start;margin-top:24px}
+}
 
 /* settings */
 .set-grid{grid-template-columns:1fr 1fr}
@@ -391,7 +417,6 @@ table{width:100%;border-collapse:collapse}
   .iconbtn{width:36px;height:36px;border-radius:9px}
   /* CRITICAL: prevents iOS Safari from zooming on input focus */
   .field input,.field select,.field textarea,
-  .li-tbl input,.li-tbl select{font-size:16px !important}
   .search input{font-size:16px !important}
   .btn{padding:10px 14px}
   .btn.sm{padding:8px 12px}
@@ -587,14 +612,14 @@ function svg(name,w=16){return `<svg viewBox="0 0 24 24" width="${w}" height="${
    ► No backend deployment ever needed.
    ============================================================ */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD5NPIUGMbs8qQfU-PekQMMT2EWDzNBj-4",
-  authDomain: "quote-master-eed65.firebaseapp.com",
-  projectId: "quote-master-eed65",
-  storageBucket: "quote-master-eed65.firebasestorage.app",
-  messagingSenderId: "530335083320",
-  appId: "1:530335083320:web:9828da5df710ce26ae6fcd"
+  apiKey:            "PASTE_YOUR_API_KEY",
+  authDomain:        "PASTE_YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "PASTE_YOUR_PROJECT_ID",
+  storageBucket:     "PASTE_YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "PASTE_YOUR_SENDER_ID",
+  appId:             "PASTE_YOUR_APP_ID"
 };
-const ADMIN_EMAIL = "vaddever@gmail.com";
+const ADMIN_EMAIL = "PASTE_YOUR_ADMIN_EMAIL";
 const TRIAL_DAYS  = 30;
 
 firebase.initializeApp(FIREBASE_CONFIG);
@@ -735,7 +760,7 @@ function seedDemo(db){
 const uid=()=>Math.random().toString(36).slice(2,10);
 const todayISO=()=>new Date().toISOString().slice(0,10);
 function addDays(iso,d){const t=new Date(iso);t.setDate(t.getDate()+d);return t.toISOString().slice(0,10);}
-function money(n){const s=State.db.settings;return s.currencySymbol+' '+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
+function money(n){const s=State.db.settings;const sym=s.currencySymbol||'';const num=Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});return'\u202A'+sym+'\u00A0'+num+'\u202C';}
 function fmtDate(iso){if(!iso)return'—';return new Date(iso).toLocaleDateString(undefined,{day:'2-digit',month:'short',year:'numeric'});}
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function hash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h)+s.charCodeAt(i);return (h>>>0).toString(16);}
@@ -1559,32 +1584,73 @@ function pickCustomer(id){
   ['c_name','c_email','c_phone','c_addr'].forEach((fid,i)=>{const el=document.getElementById(fid);if(el)el.value=[c.name,c.email,c.phone,c.address][i]||'';});
 }
 function renderLineEditor(){
-  const d=editing.doc;calcDoc(d,State.db);
-  const itemOpts=State.db.items.map(i=>`<option value="${i.id}">${esc(i.name)}</option>`).join('');
+  const d=editing.doc; calcDoc(d,State.db);
+  const s=State.db.settings;
   const host=document.getElementById('lineEditor');
-  host.innerHTML=`<table class="li-tbl"><thead><tr><th style="width:40%">Item / description</th><th>Qty</th><th>Unit price</th><th>Tax</th><th class="right">Amount</th><th></th></tr></thead><tbody>
-    ${d.lineItems.map((li,ix)=>`<tr>
-      <td><input value="${esc(li.name)}" oninput="editing.doc.lineItems[${ix}].name=this.value" placeholder="Description">
-          <div style="margin-top:4px"><select onchange="pickItem(${ix},this.value)" style="font-size:12px"><option value="">— pick from catalogue —</option>${itemOpts}</select></div></td>
-      <td><input type="number" step="any" value="${li.qty}" oninput="editing.doc.lineItems[${ix}].qty=+this.value;recalcLines()"></td>
-      <td><input type="number" step="0.01" value="${li.unitPrice}" oninput="editing.doc.lineItems[${ix}].unitPrice=+this.value;recalcLines()"></td>
-      <td><select onchange="editing.doc.lineItems[${ix}].taxable=this.value==='1';recalcLines()"><option value="1" ${li.taxable?'selected':''}>Yes</option><option value="0" ${!li.taxable?'selected':''}>No</option></select></td>
-      <td class="right mono">${money(li.amount||0)}</td>
-      <td><button class="iconbtn" onclick="editing.doc.lineItems.splice(${ix},1);renderLineEditor()">${svg('trash')}</button></td>
-    </tr>`).join('')}
-  </tbody></table>
-  <button class="btn ghost sm li-add" onclick="editing.doc.lineItems.push({name:'',desc:'',qty:1,unitPrice:0,taxable:true});renderLineEditor()">${svg('plus')} Add line</button>
-  <div class="d-tot" style="display:flex;justify-content:flex-end;margin-top:14px"><table class="mono" style="font-size:13.5px">
-    <tr><td class="muted" style="text-align:right;padding:3px 14px">Subtotal</td><td class="right" style="padding:3px 0">${money(d.totals.subtotal)}</td></tr>
-    <tr><td class="muted" style="text-align:right;padding:3px 14px">${esc(State.db.settings.taxLabel)} (${State.db.settings.taxRate}%)</td><td class="right" style="padding:3px 0">${money(d.totals.tax)}</td></tr>
-    <tr><td style="text-align:right;padding:6px 14px;font-weight:700">Total</td><td class="right" style="padding:6px 0;font-weight:700;font-size:16px">${money(d.totals.total)}</td></tr>
-  </table></div>`;
+
+  const itemOpts=State.db.items.map(i=>`<option value="${i.id}">${esc(i.name)}</option>`).join('');
+
+  const cardsHtml=d.lineItems.map((li,ix)=>{
+    const taxLabel=li.taxable?(s.taxLabel||'Tax')+' ✓':'No tax';
+    const selectedItem=li.itemId?State.db.items.find(i=>i.id===li.itemId):null;
+    return '<div class="li-card">'+
+      '<div class="li-cat-wrap">'+
+        '<select onchange="pickItem('+ix+',this.value)" title="Pick from product catalogue">'+
+          '<option value="">📦 Pick from catalogue…</option>'+
+          State.db.items.map(i=>'<option value="'+i.id+'"'+(li.itemId===i.id?' selected':'')+'>'+esc(i.name)+'</option>').join('')+
+        '</select>'+
+        (selectedItem&&selectedItem.unitPrice?
+          '<span class="muted" style="font-size:12px;white-space:nowrap">'+money(selectedItem.unitPrice)+' / '+esc(selectedItem.unit||'pc')+'</span>':'')
+      +'</div>'+
+      '<input class="li-name-input" value="'+esc(li.name)+'" placeholder="Item / service description" '+
+        'oninput="editing.doc.lineItems['+ix+'].name=this.value">'+
+      '<div class="li-nums">'+
+        '<div class="li-num-field"><label>Qty</label>'+
+          '<input type="number" step="any" min="0" value="'+li.qty+'" '+
+            'oninput="editing.doc.lineItems['+ix+'].qty=+this.value;recalcLines()"></div>'+
+        '<div class="li-num-field"><label>Unit price</label>'+
+          '<input type="number" step="0.01" min="0" value="'+li.unitPrice+'" '+
+            'oninput="editing.doc.lineItems['+ix+'].unitPrice=+this.value;recalcLines()"></div>'+
+        '<button class="li-tax-toggle'+(li.taxable?' on':'')+'" title="Toggle tax" '+
+          'onclick="editing.doc.lineItems['+ix+'].taxable=!editing.doc.lineItems['+ix+'].taxable;recalcLines()">'+
+          taxLabel+'</button>'+
+        '<div class="li-amt">'+money(li.amount||0)+'</div>'+
+        '<button class="iconbtn li-del" title="Remove line" onclick="editing.doc.lineItems.splice('+ix+',1);renderLineEditor()">'+svg('trash')+'</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  const emptyHtml=d.lineItems.length?'':
+    '<div style="text-align:center;padding:20px;color:var(--ink-soft);font-size:13.5px;border:1.5px dashed var(--line);border-radius:12px;margin-bottom:10px">'+
+      'No items yet — pick from your catalogue or add a custom line below.</div>';
+
+  const totHtml=
+    '<div class="li-totals"><table class="li-tot-table">'+
+      '<tr><td class="li-tot-lbl">Subtotal</td><td class="li-tot-val">'+money(d.totals.subtotal)+'</td></tr>'+
+      '<tr><td class="li-tot-lbl">'+esc(s.taxLabel)+' ('+s.taxRate+'%)</td><td class="li-tot-val">'+money(d.totals.tax)+'</td></tr>'+
+      '<tr class="li-grand"><td class="li-tot-lbl">Total</td><td class="li-tot-val">'+money(d.totals.total)+'</td></tr>'+
+    '</table></div>';
+
+  host.innerHTML=emptyHtml+cardsHtml+
+    '<button class="li-add-btn" onclick="editing.doc.lineItems.push({name:\'\',desc:\'\',qty:1,unitPrice:0,taxable:true});renderLineEditor()">'+
+      svg('plus',15)+' Add line item</button>'+totHtml;
   renderIcons(host);
 }
 function pickItem(ix,id){if(!id)return;const it=State.db.items.find(i=>i.id===id);const li=lineFromItem(it);li.qty=editing.doc.lineItems[ix].qty||1;editing.doc.lineItems[ix]={...li};renderLineEditor();}
-function recalcLines(){calcDoc(editing.doc,State.db);
-  // light update of amounts + totals without full rerender (keeps focus)
-  renderLineEditor();}
+function recalcLines(){
+  calcDoc(editing.doc,State.db);
+  // Update amounts in-place (avoids rerender which loses focus)
+  editing.doc.lineItems.forEach((li,ix)=>{
+    const amtEls=document.querySelectorAll('.li-amt');
+    if(amtEls[ix])amtEls[ix].textContent=money(li.amount||0);
+  });
+  // Update totals
+  const d=editing.doc,s=State.db.settings;
+  const rows=document.querySelectorAll('.li-tot-val');
+  if(rows[0])rows[0].textContent=money(d.totals.subtotal);
+  if(rows[1])rows[1].textContent=money(d.totals.tax);
+  if(rows[2])rows[2].textContent=money(d.totals.total);
+}
 function saveDoc(){
   const d=editing.doc;
   if(!d.customer.name){toast('Customer name is required');return false;}
