@@ -518,6 +518,7 @@ table{width:100%;border-collapse:collapse}
         <a data-view="employees"><span class="ic" data-i="badge"></span> Employees</a>
         <div class="nav-group">Finance</div>
         <a data-view="expenses" data-feature="expenses"><span class="ic" data-i="wallet"></span> Expenses <span class="lock" data-lock data-feature-lock="expenses">PRO</span></a>
+        <a data-view="gst" data-feature="gst"><span class="ic" data-i="receipt"></span> GST <span class="lock" data-lock data-feature-lock="gst">PRO</span></a>
         <a data-view="zakat" data-feature="zakat"><span class="ic" data-i="moon"></span> Zakat ☪ <span class="lock" data-lock data-feature-lock="zakat">PRO</span></a>
         <div class="nav-group">Sales</div>
         <a data-view="quotations"><span class="ic" data-i="doc"></span> Quotations</a>
@@ -710,7 +711,7 @@ function isPro(){ const p=State.db?.settings?.plan; return p==='pro'||p==='trial
 /* Which features require Pro by default, until admin overrides via Portal Admin
    → Platform Settings → Pro Feature Configuration. true = Pro-only, false = free for everyone. */
 const DEFAULT_PRO_FEATURES={
-  stock:false, deliveries:true, email:true, team:true, expenses:true, zakat:false, multiEmployee:true
+  stock:false, deliveries:true, email:true, team:true, expenses:true, zakat:false, gst:false, multiEmployee:true
 };
 function proFeatures(){ return Object.assign({},DEFAULT_PRO_FEATURES,_platformCfg.proFeatures||{}); }
 function featureLocked(key){ return !!proFeatures()[key] && !isPro(); }
@@ -835,6 +836,7 @@ function launchApp(){
   if(State.db && !Array.isArray(State.db.stockMovements)) State.db.stockMovements=[];
   if(State.db && !Array.isArray(State.db.stockAudits))    State.db.stockAudits=[];
   if(State.db && !Array.isArray(State.db.zakatRecords))   State.db.zakatRecords=[];
+  if(State.db && !State.db.gstSettings) State.db.gstSettings={registered:false,gstNumber:'',sector:'general',filingFrequency:'quarterly',filedReturns:[]};
   if(State.db){const s=State.db.settings;if(!s.zakatNisabStd)s.zakatNisabStd='silver';if(!s.zakatSilverPrice)s.zakatSilverPrice=32.82;if(!s.zakatGoldPrice)s.zakatGoldPrice=440;}
   const DEFAULT_UOMS=['pc','box','hr','kg','g','L','mL','m','cm','ft','dozen','ream','pair','set','service','month','day','km'];
   if(State.db){ const s=State.db.settings; if(!s.uoms||!s.uoms.length)s.uoms=[...DEFAULT_UOMS]; }
@@ -881,8 +883,8 @@ document.getElementById('upgradeBtn').onclick=openUpgrade;
 /* ============================================================
    ROUTER
    ============================================================ */
-const VIEW_FEATURE_MAP={stock:'stock',deliveries:'deliveries',email:'email',team:'team',expenses:'expenses',zakat:'zakat'};
-const TITLES={dashboard:'Dashboard',items:'Products',stock:'Stock',customers:'Customers',pos:'Point of Sale',employees:'Employees',expenses:'Expenses',zakat:'Zakat Calculator',quotations:'Quotations',invoices:'Invoices',deliveries:'Deliveries',email:'Email',team:'Team Access',settings:'Settings',admin:'Portal Admin'};
+const VIEW_FEATURE_MAP={stock:'stock',deliveries:'deliveries',email:'email',team:'team',expenses:'expenses',zakat:'zakat',gst:'gst'};
+const TITLES={dashboard:'Dashboard',items:'Products',stock:'Stock',customers:'Customers',pos:'Point of Sale',employees:'Employees',expenses:'Expenses',gst:'GST',zakat:'Zakat Calculator',quotations:'Quotations',invoices:'Invoices',deliveries:'Deliveries',email:'Email',team:'Team Access',settings:'Settings',admin:'Portal Admin'};
 function go(view){
   if(view==='admin'&&!State.isAdmin){view='dashboard';}
   State.view=view;
@@ -891,7 +893,7 @@ function go(view){
   const c=document.getElementById('content');
   const fkey=VIEW_FEATURE_MAP[view];
   if(fkey&&featureLocked(fkey)){c.innerHTML=lockedView(view);renderIcons(c);return;}
-  ({dashboard:viewDashboard,items:viewItems,stock:viewStock,customers:viewCustomers,pos:viewPOS,employees:viewEmployees,expenses:viewExpenses,zakat:viewZakat,quotations:()=>viewDocs('quote'),invoices:()=>viewDocs('invoice'),deliveries:viewDeliveries,email:viewEmail,team:viewTeam,settings:viewSettings,admin:viewAdmin}[view])();
+  ({dashboard:viewDashboard,items:viewItems,stock:viewStock,customers:viewCustomers,pos:viewPOS,employees:viewEmployees,expenses:viewExpenses,gst:viewGST,zakat:viewZakat,quotations:()=>viewDocs('quote'),invoices:()=>viewDocs('invoice'),deliveries:viewDeliveries,email:viewEmail,team:viewTeam,settings:viewSettings,admin:viewAdmin}[view])();
   renderIcons(c);
 }
 document.getElementById('nav').addEventListener('click',e=>{const a=e.target.closest('a[data-view]');if(a){go(a.dataset.view);toggleNav(false);}});
@@ -2700,6 +2702,664 @@ function zkOpenSettings() {
 }
 
 /* ============================================================
+   ZAKAT — MIRA field overrides
+   ============================================================ */
+/* ============================================================
+   ZAKAT — Updated fields to match MIRA Maldives calculator
+   Sections: Currency · Money · Gold · Silver · Investments ·
+             Business · Others · Payables
+   ============================================================ */
+
+/* Override zkCalc to use new fields */
+function zkCalc(rec) {
+  var s   = State.db.settings;
+  var gp  = +(rec.goldPrice   || s.zakatGoldPrice)   || 0;
+  var sp  = +(rec.silverPrice || s.zakatSilverPrice)  || 32.82;
+  /* currency conversion */
+  var fx  = rec.currency === 'USD' ? +(rec.exchangeRate||15.4) : 1;
+
+  /* assets (all in MVR) */
+  var cashInHand        = (+(rec.cashInHand     ||0)) * fx;
+  var cashInBank        = (+(rec.bankBalance    ||0)) * fx;
+  var goldValue         = (+(rec.goldGrams      ||0)) * gp;
+  var silverValue       = (+(rec.silverGrams    ||0)) * sp;
+  var shares            = (+(rec.shares         ||0)) * fx;
+  var otherInvestments  = (+(rec.investments    ||0)) * fx;
+  var businessCash      = (+(rec.businessCash   ||0)) * fx;
+  var goodsStock        = (+(rec.inventory      ||0));  /* auto-pulled at cost */
+  var receivables       = (+(rec.receivables    ||0));  /* auto-pulled */
+  var loanToFamily      = (+(rec.loanedMoney    ||0)) * fx;
+  var otherAssets       = (+(rec.otherAssets    ||0)) * fx;
+
+  var totalAssets = cashInHand + cashInBank + goldValue + silverValue +
+    shares + otherInvestments + businessCash + goodsStock + receivables +
+    loanToFamily + otherAssets;
+
+  /* payables (deductions) */
+  var creditCard        = +(rec.creditCardPayments  ||0);
+  var homePayments      = +(rec.homePayments        ||0);
+  var businessPayments  = +(rec.businessPayments    ||0);
+  var vehiclePayments   = +(rec.vehiclePayments     ||0);
+  var generalDebts      = +(rec.generalDebts        ||0);
+  /* legacy fields for backward compat */
+  var legacyDebts = (+(rec.immediateDebts||0)) + (+(rec.otherDebts||0));
+  var totalDebts = creditCard + homePayments + businessPayments + vehiclePayments + generalDebts + legacyDebts;
+
+  var net   = Math.max(0, totalAssets - totalDebts);
+  var nisab = zkNisab(rec);
+  var above = net >= nisab;
+  var due   = above ? +(net * 0.025).toFixed(2) : 0;
+
+  return {
+    total: +totalAssets.toFixed(2), debts: +totalDebts.toFixed(2),
+    net: +net.toFixed(2), nisab: nisab, above: above, due: due,
+    /* breakdown for sidebar */
+    _lines: [
+      ['Cash in hand',    cashInHand],
+      ['Cash in bank',    cashInBank],
+      ['Gold (' + (+(rec.goldGrams||0)) + ' g)', goldValue],
+      ['Silver (' + (+(rec.silverGrams||0)) + ' g)', silverValue],
+      ['Shares',          shares],
+      ['Other investments',otherInvestments],
+      ['Business cash',   businessCash],
+      ['Goods / Stock',   goodsStock],
+      ['Receivables',     receivables],
+      ['Loan to family',  loanToFamily],
+      ['Other assets',    otherAssets]
+    ]
+  };
+}
+
+/* Override zkRenderCalc — match MIRA field layout */
+function zkRenderCalc() {
+  var r   = _zkRec;
+  var res = zkCalc(r);
+  var s   = State.db.settings;
+  var invCount    = State.db.items.filter(function(i){ return i.trackStock!==false&&(i.stockQty||0)>0; }).length;
+  var unpaidCount = State.db.invoices.filter(function(i){ return i.status!=='paid'; }).length;
+
+  function numInput(id, recKey, oninput) {
+    var v = +(r[recKey]||0);
+    return '<input id="'+id+'" type="number" step="0.01" min="0" value="'+v+'" ' +
+      'oninput="_zkRec.'+recKey+'=+this.value;'+oninput+'">';
+  }
+  function section(title, content) {
+    return '<div class="zk-sec"><h4>' + title + '</h4>' + content + '</div>';
+  }
+  function row2(l1, id1, key1, l2, id2, key2, extra1, extra2) {
+    return '<div class="fgrid">' +
+      '<div class="field"><label>' + l1 + '</label>' + numInput(id1, key1, 'zkUpdateSide()') + (extra1||'') + '</div>' +
+      (l2 ? '<div class="field"><label>' + l2 + '</label>' + numInput(id2, key2, 'zkUpdateSide()') + (extra2||'') + '</div>' : '') +
+    '</div>';
+  }
+
+  /* Currency section */
+  var currencySec =
+    '<div class="zk-sec"><h4>Select Currency</h4>' +
+      '<div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">' +
+        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px">' +
+          '<input type="radio" name="zk_cur" value="MVR" ' + (r.currency!=='USD'?'checked':'') + ' onchange="_zkRec.currency=\'MVR\';zkUpdateSide()">' +
+          ' Maldivian Rufiyaa (MVR)</label>' +
+        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px">' +
+          '<input type="radio" name="zk_cur" value="USD" ' + (r.currency==='USD'?'checked':'') + ' onchange="_zkRec.currency=\'USD\';zkUpdateSide()">' +
+          ' United States Dollars (USD)</label>' +
+      '</div>' +
+      (r.currency==='USD'?'<div class="fgrid" style="margin-top:10px"><div class="field"><label>USD → MVR exchange rate</label>'+numInput('zk_fx','exchangeRate','zkUpdateSide()')+'</div></div>':'') +
+    '</div>';
+
+  /* Money section */
+  var moneySec = section('Money', row2('Cash in Hand','zk_cash','cashInHand','Cash in Bank','zk_bank','bankBalance'));
+
+  /* Gold */
+  var goldVal = (+(r.goldGrams||0))*(+(r.goldPrice||s.zakatGoldPrice)||0);
+  var goldSec = section('Gold Value',
+    '<div class="fgrid">' +
+      '<div class="field"><label>Gold (grams)</label>' + numInput('zk_gg','goldGrams','zkUpdateSide()') +
+        '<div class="muted" style="font-size:12px;margin-top:3px">Value: ' + money(goldVal) + '</div></div>' +
+      '<div class="field"><label>Gold price / gram (' + esc(s.currency) + ')</label>' + numInput('zk_gp','goldPrice','zkUpdateSide()') + '</div>' +
+    '</div>');
+
+  /* Silver */
+  var silvVal = (+(r.silverGrams||0))*(+(r.silverPrice||s.zakatSilverPrice)||0);
+  var silvSec = section('Silver Value',
+    '<div class="fgrid">' +
+      '<div class="field"><label>Silver (grams)</label>' + numInput('zk_sg','silverGrams','zkUpdateSide()') +
+        '<div class="muted" style="font-size:12px;margin-top:3px">Value: ' + money(silvVal) + '</div></div>' +
+      '<div class="field"><label>Silver price / gram (' + esc(s.currency) + ')</label>' + numInput('zk_sp','silverPrice','zkUpdateSide()') + '</div>' +
+    '</div>');
+
+  /* Investments */
+  var invSec = section('Investments', row2('Shares','zk_shares','shares','Other Investments','zk_inv2','investments'));
+
+  /* Business */
+  var bizSec = section('Business',
+    '<div class="fgrid">' +
+      '<div class="field"><label>Business Cash</label>' + numInput('zk_bcash','businessCash','zkUpdateSide()') + '</div>' +
+      '<div class="field"><label>Goods / Stock (inventory) <span class="auto-tag">auto</span></label>' +
+        numInput('zk_inv','inventory','zkUpdateSide()') +
+        '<div class="muted" style="font-size:12px;margin-top:3px">' + invCount + ' product lines tracked</div></div>' +
+      '<div class="field"><label>Outstanding receivables <span class="auto-tag">auto</span></label>' +
+        numInput('zk_rec','receivables','zkUpdateSide()') +
+        '<div class="muted" style="font-size:12px;margin-top:3px">' + unpaidCount + ' unpaid invoice(s)</div></div>' +
+    '</div>');
+
+  /* Others */
+  var otherSec = section('Others', row2('Loan to Family / Other','zk_loan','loanedMoney','Other Assets','zk_oth','otherAssets'));
+
+  /* Payables */
+  var payableSec = section('Payables',
+    '<p class="muted" style="font-size:12.5px;margin-bottom:10px">Deduct debts currently due. Only immediate obligations may be deducted per Islamic jurisprudence.</p>' +
+    '<div class="fgrid">' +
+      '<div class="field"><label>Credit Card Payments</label>' + numInput('zk_cc','creditCardPayments','zkUpdateSide()') + '</div>' +
+      '<div class="field"><label>Home Payments</label>' + numInput('zk_hp','homePayments','zkUpdateSide()') + '</div>' +
+      '<div class="field"><label>Business Payments</label>' + numInput('zk_bp','businessPayments','zkUpdateSide()') + '</div>' +
+      '<div class="field"><label>Vehicle Payments</label>' + numInput('zk_vp','vehiclePayments','zkUpdateSide()') + '</div>' +
+      '<div class="field full"><label>Other Debts</label>' + numInput('zk_dbt','generalDebts','zkUpdateSide()') + '</div>' +
+    '</div>');
+
+  /* Nisab & hawl */
+  var nisabSec =
+    '<div class="zk-sec"><h4>' + svg('moon',13) + ' Nisab & Hawl Settings</h4>' +
+      '<div class="fgrid">' +
+        '<div class="field"><label>Hijri year / label</label>' +
+          '<input id="zk_yr" value="' + esc(r.hijriYear||zkHijriYear()) + '" oninput="_zkRec.hijriYear=this.value"></div>' +
+        '<div class="field"><label>Calculation date</label>' +
+          '<input type="date" id="zk_dt" value="' + r.date + '" oninput="_zkRec.date=this.value"></div>' +
+        '<div class="field"><label>Nisab standard</label>' +
+          '<select id="zk_std" onchange="_zkRec.nisabStd=this.value;zkUpdateSide()">' +
+            '<option value="silver"' + (r.nisabStd==='silver'?' selected':'') + '>Silver (595 g) — recommended</option>' +
+            '<option value="gold"'   + (r.nisabStd==='gold'?  ' selected':'') + '>Gold (85 g)</option>' +
+          '</select></div>' +
+        '<div class="field" style="align-self:end"><label>Nisab at these prices</label>' +
+          '<div id="zk_nisab_val" style="padding:9px 12px;border:1px solid var(--accent);border-radius:10px;font-weight:700;color:var(--accent-ink);background:var(--accent-soft)">' +
+            money(res.nisab) + '</div></div>' +
+      '</div>' +
+    '</div>';
+
+  /* Notes */
+  var notesSec = '<div class="zk-sec"><h4>Notes</h4><div class="field">' +
+    '<textarea id="zk_notes" rows="2" placeholder="Optional…" oninput="_zkRec.notes=this.value">' + esc(r.notes||'') + '</textarea></div></div>';
+
+  /* Buttons */
+  var btnHtml = '<div class="row" style="gap:10px;margin-top:8px;flex-wrap:wrap">' +
+    '<button class="btn ghost" onclick="viewZakat()">&#8592; Back</button>' +
+    '<button class="btn accent" onclick="zkSave()">Save calculation</button></div>';
+
+  var formHtml = nisabSec + currencySec + moneySec + goldSec + silvSec + invSec + bizSec + otherSec +
+    zkBankSectionHtml() + payableSec + notesSec + btnHtml;
+
+  var colsCss = isMob() ? '1fr' : '1fr 340px';
+  document.getElementById('content').innerHTML =
+    '<div style="display:grid;grid-template-columns:' + colsCss + ';gap:16px;align-items:start">' +
+      '<div>' + formHtml + '</div>' +
+      '<div id="zk_side">' + zkBuildSide(res, r) + '</div>' +
+    '</div>';
+  if (_zkBankEntries.length) zkRenderBankResults();
+}
+
+/* Override zkBuildSide to use new _lines from zkCalc */
+function zkBuildSide(res, r) {
+  var rows = '';
+  (res._lines||[]).forEach(function(line) {
+    if (line[1] > 0) {
+      rows += '<div class="zk-row"><span>' + line[0] + '</span><span class="v">' + money(line[1]) + '</span></div>';
+    }
+  });
+  rows += '<div class="zk-row zk-total"><span>Total assets</span><span class="v">' + money(res.total) + '</span></div>';
+  if (res.debts > 0) {
+    rows += '<div class="zk-row zk-deduct"><span>Less: payables / debts</span><span class="v">&#8722;' + money(res.debts) + '</span></div>';
+  }
+  rows += '<div class="zk-row" style="border-top:2px solid var(--accent);padding-top:8px;font-weight:700">' +
+    '<span>Net zakatable wealth</span><span class="v" style="color:var(--accent-ink)">' + money(res.net) + '</span></div>';
+  rows += '<div class="zk-row"><span class="muted" style="font-size:12.5px">Nisab threshold</span>' +
+    '<span class="v muted" style="font-size:12.5px">' + money(res.nisab) + '</span></div>';
+  if (res.above) {
+    rows += '<div class="zk-row" style="border-top:2px solid var(--accent);margin-top:4px;padding-top:10px">' +
+      '<span style="font-weight:700;font-size:15px">Zakat (2.5 %)</span>' +
+      '<span class="v" style="font-size:18px;color:var(--accent-ink)">' + money(res.due) + '</span></div>';
+  }
+  var payHtml = r.paid
+    ? '<div class="card pad" style="background:var(--accent-soft);border-color:var(--accent);margin-top:12px;text-align:center">' +
+        '<div style="font-weight:700;color:var(--accent-ink)">&#10003; Paid</div>' +
+        '<div class="muted" style="font-size:12.5px">' + fmtDate(r.paidDate) + ' &middot; ' + money(r.paidAmount) + ' via ' + esc(r.paidVia||'') + '</div>' +
+      '</div>'
+    : '<button class="btn amber block" style="margin-top:12px" onclick="zkRecordPayment()">Record MIRA payment</button>';
+
+  var dueDiv = res.above
+    ? '<div class="zk-result"><div class="lbl">&#9728; Zakat due (2.5 %)</div><div class="amt">' + money(res.due) + '</div><span class="nisab-ok">&#10003; Above nisab</span></div>'
+    : '<div class="zk-result none"><div class="lbl">Nisab check</div><div class="amt" style="font-size:20px">Alhamdulillah</div><span class="nisab-no">Below nisab — no zakat due</span></div>';
+
+  var stickyStyle = isMob() ? 'static' : 'sticky';
+  return '<div style="position:' + stickyStyle + ';top:80px">' +
+    dueDiv +
+    '<div class="zk-sec"><h4>Breakdown</h4>' + rows + '</div>' +
+    payHtml +
+    '<div class="card pad" style="margin-top:12px;font-size:12.5px;color:var(--ink-soft)">' +
+      '<b style="color:var(--ink)">Pay via MIRA (Maldives)</b><br>' +
+      'Form <b>MIRA 510</b> &mdash; pay at <a href="https://www.mira.gov.mv" target="_blank" class="linkish">mira.gov.mv</a>, ' +
+      'Taxpayer Service Centre, or local island council.<br>Hotline: <b>1415</b>' +
+    '</div></div>';
+}
+
+/* Also patch startZakatCalc to seed new fields */
+var _origStartZakat = startZakatCalc;
+startZakatCalc = function() {
+  _origStartZakat();
+  // Seed new fields not in original rec
+  if (!_zkRec.currency)          _zkRec.currency = 'MVR';
+  if (!_zkRec.exchangeRate)      _zkRec.exchangeRate = 15.4;
+  if (!_zkRec.shares)            _zkRec.shares = 0;
+  if (!_zkRec.businessCash)      _zkRec.businessCash = 0;
+  if (!_zkRec.creditCardPayments) _zkRec.creditCardPayments = 0;
+  if (!_zkRec.homePayments)      _zkRec.homePayments = 0;
+  if (!_zkRec.businessPayments)  _zkRec.businessPayments = 0;
+  if (!_zkRec.vehiclePayments)   _zkRec.vehiclePayments = 0;
+  if (!_zkRec.generalDebts)      _zkRec.generalDebts = 0;
+  zkRenderCalc();
+};
+
+/* ============================================================
+   GST MODULE
+   ============================================================ */
+/* ============================================================
+   GST MODULE — Maldives General Goods & Services Tax
+   Rate: 8% (General sector, from 1 Jan 2023)
+   Filing: MIRA 205 form via MIRAconnect
+   Deadline: 28th of month following end of taxable period
+   Monthly: avg sales > MVR 1 million/month
+   Quarterly: avg sales ≤ MVR 1 million/month (Jan-Mar, Apr-Jun, Jul-Sep, Oct-Dec)
+   ============================================================ */
+
+var _gstTab = 'overview';
+
+/* ---- helpers ---- */
+function gstRate() { return +(State.db.settings.taxRate) || 8; }
+function gstSettings() { return State.db.gstSettings || {}; }
+
+function gstPeriodLabel(period) {
+  var m = period.match(/^(\d{4})-(Q\d|M\d{2})$/);
+  if (!m) return period;
+  if (m[2].startsWith('Q')) {
+    var q = {'Q1':'Jan – Mar','Q2':'Apr – Jun','Q3':'Jul – Sep','Q4':'Oct – Dec'}[m[2]]||m[2];
+    return m[2] + ' ' + m[1] + '  (' + q + ')';
+  }
+  var mo = new Date(m[1]+'-'+m[2].slice(1)+'-01').toLocaleString('default',{month:'long'});
+  return mo + ' ' + m[1];
+}
+
+function currentGstPeriod() {
+  var now = new Date();
+  var y = now.getFullYear(), m = now.getMonth()+1;
+  var gs = gstSettings();
+  if (gs.filingFrequency === 'monthly') {
+    return y + '-M' + (m < 10 ? '0'+m : m);
+  }
+  // quarterly: Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec
+  var q = Math.ceil(m/3);
+  return y + '-Q' + q;
+}
+
+function gstPeriodRange(period) {
+  // Returns {start:'YYYY-MM-DD', end:'YYYY-MM-DD', dueDate:'YYYY-MM-DD'}
+  var m = period.match(/^(\d{4})-(Q\d|M(\d{2}))$/);
+  if (!m) return null;
+  var y = +m[1];
+  if (m[2].startsWith('M')) {
+    var mo = +m[3], lastDay = new Date(y, mo, 0).getDate();
+    var due = new Date(y, mo, 28); // 28th of following month
+    return { start: y+'-'+(mo<10?'0'+mo:mo)+'-01',
+             end:   y+'-'+(mo<10?'0'+mo:mo)+'-'+lastDay,
+             dueDate: due.toISOString().slice(0,10) };
+  }
+  var qMap = {Q1:[1,3], Q2:[4,6], Q3:[7,9], Q4:[10,12]};
+  var range = qMap[m[2]]; if (!range) return null;
+  var endMo = range[1], lastDay2 = new Date(y, endMo, 0).getDate();
+  var dueY = endMo === 12 ? y+1 : y, dueMo = endMo === 12 ? 1 : endMo+1;
+  return { start: y+'-'+(range[0]<10?'0'+range[0]:range[0])+'-01',
+           end:   y+'-'+(endMo<10?'0'+endMo:endMo)+'-'+lastDay2,
+           dueDate: dueY+'-'+(dueMo<10?'0'+dueMo:dueMo)+'-28' };
+}
+
+/* ---- calculate output & input tax for a date range ---- */
+function calcGstReturn(startIso, endIso) {
+  var db = State.db;
+  var rate = gstRate();
+
+  // Output tax: from invoices issued in range
+  var invInRange = (db.invoices||[]).filter(function(inv) {
+    return inv.date >= startIso && inv.date <= endIso;
+  });
+  var totalSales = 0, outputTax = 0;
+  invInRange.forEach(function(inv) {
+    totalSales += (inv.totals && inv.totals.subtotal) || 0;
+    outputTax  += (inv.totals && inv.totals.tax)      || 0;
+  });
+
+  // Input tax: from expenses in range that were GST-inclusive
+  var expInRange = (db.expenses||[]).filter(function(e) {
+    return e.date >= startIso && e.date <= endIso;
+  });
+  var totalPurchases = 0, inputTax = 0;
+  expInRange.forEach(function(e) {
+    var amt = +(e.amount||0);
+    totalPurchases += amt;
+    // Use explicit inputTax if set, otherwise derive from gstInclusive flag
+    if (e.inputTax && +e.inputTax > 0) {
+      inputTax += +e.inputTax;
+    } else if (e.gstInclusive) {
+      inputTax += +(amt * rate / (100 + rate)).toFixed(2);
+    }
+  });
+
+  var netGst    = +(outputTax - inputTax).toFixed(2);
+  var payable   = Math.max(0, netGst);
+  var carryFwd  = Math.max(0, -netGst);
+
+  return {
+    totalSales:     +totalSales.toFixed(2),
+    outputTax:      +outputTax.toFixed(2),
+    totalPurchases: +totalPurchases.toFixed(2),
+    inputTax:       +inputTax.toFixed(2),
+    netGst:         netGst,
+    payable:        payable,
+    carryFwd:       carryFwd,
+    invoiceCount:   invInRange.length,
+    expenseCount:   expInRange.length
+  };
+}
+
+/* ---- main view ---- */
+function viewGST() {
+  var gs = gstSettings();
+  var c  = document.getElementById('content');
+
+  // Hero banner
+  var regBadge = gs.registered
+    ? '<span class="badge pro" style="font-size:11px">GST Registered</span>'
+    : '<span class="badge free" style="font-size:11px;background:var(--amber-soft);color:var(--amber)">Not registered</span>';
+
+  var heroHtml =
+    '<div style="background:linear-gradient(135deg,#1d4ed8,#1e3a8a);color:#fff;border-radius:14px;padding:20px 24px;margin-bottom:16px;position:relative;overflow:hidden">' +
+      '<div style="position:absolute;right:20px;top:50%;transform:translateY(-50%);font-size:64px;opacity:.1;line-height:1">%</div>' +
+      '<div style="font-size:20px;font-weight:700;margin-bottom:4px">GST — General Goods & Services Tax</div>' +
+      '<div style="opacity:.85;font-size:13.5px">Rate: <b>' + gstRate() + '%</b> (General sector)' +
+        (gs.gstNumber ? ' &nbsp;&middot;&nbsp; GST No: <b>' + esc(gs.gstNumber) + '</b>' : '') +
+        ' &nbsp;&middot;&nbsp; ' + regBadge +
+      '</div>' +
+      '<div style="opacity:.75;font-size:12px;margin-top:5px">Filing: ' + (gs.filingFrequency==='monthly'?'Monthly':'Quarterly') +
+        ' &nbsp;&middot;&nbsp; Deadline: 28th of following month &nbsp;&middot;&nbsp; Form: MIRA 205' +
+      '</div>' +
+    '</div>';
+
+  var tabHtml =
+    '<div class="tabs" style="margin-bottom:14px">' +
+      '<button class="' + (_gstTab==='overview'?'active':'') + '" onclick="_gstTab=\'overview\';viewGST()">Overview</button>' +
+      '<button class="' + (_gstTab==='returns'?'active':'') + '" onclick="_gstTab=\'returns\';viewGST()">Returns</button>' +
+      '<button class="' + (_gstTab==='expenses'?'active':'') + '" onclick="_gstTab=\'expenses\';viewGST()">Input Tax (Purchases)</button>' +
+      '<button class="' + (_gstTab==='settings'?'active':'') + '" onclick="_gstTab=\'settings\';viewGST()">Settings</button>' +
+    '</div>';
+
+  c.innerHTML = heroHtml + tabHtml + '<div id="gstPanel"></div>';
+  var panel = document.getElementById('gstPanel');
+
+  if (_gstTab === 'overview')  gstRenderOverview(panel);
+  else if (_gstTab === 'returns')  gstRenderReturns(panel);
+  else if (_gstTab === 'expenses') gstRenderInputTax(panel);
+  else gstRenderSettings(panel);
+}
+
+/* ---- overview ---- */
+function gstRenderOverview(panel) {
+  var period = currentGstPeriod();
+  var range  = gstPeriodRange(period);
+  if (!range) { panel.innerHTML='<div class="card pad muted">Could not determine current period.</div>'; return; }
+  var res = calcGstReturn(range.start, range.end);
+  var today = new Date().toISOString().slice(0,10);
+  var daysLeft = Math.ceil((new Date(range.dueDate) - new Date()) / 86400000);
+  var dueStr = fmtDate(range.dueDate) + (daysLeft > 0 ? ' (' + daysLeft + ' days)' : ' <b style="color:var(--danger)">OVERDUE</b>');
+
+  var posCard = res.netGst >= 0
+    ? '<div style="background:#dbeafe;border:1.5px solid #3b82f6;border-radius:13px;padding:16px 20px;text-align:center">' +
+        '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#1d4ed8;margin-bottom:6px">GST Payable to MIRA</div>' +
+        '<div style="font-size:34px;font-weight:700;color:#1e3a8a;font-family:\'Spline Sans Mono\',monospace">' + money(res.payable) + '</div>' +
+        '<div style="font-size:12.5px;color:#3b82f6;margin-top:4px">Due by ' + fmtDate(range.dueDate) + '</div>' +
+      '</div>'
+    : '<div style="background:var(--accent-soft);border:1.5px solid var(--accent);border-radius:13px;padding:16px 20px;text-align:center">' +
+        '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--accent-ink);margin-bottom:6px">Input Tax Credit (Carry Forward)</div>' +
+        '<div style="font-size:34px;font-weight:700;color:var(--accent-ink);font-family:\'Spline Sans Mono\',monospace">' + money(res.carryFwd) + '</div>' +
+        '<div style="font-size:12.5px;color:var(--accent-ink);margin-top:4px">Carry to next period</div>' +
+      '</div>';
+
+  panel.innerHTML =
+    '<div class="card pad" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">' +
+      '<div><div style="font-size:16px;font-weight:700">' + gstPeriodLabel(period) + '</div>' +
+        '<div class="muted" style="font-size:12.5px">' + fmtDate(range.start) + ' – ' + fmtDate(range.end) + ' &nbsp;&middot;&nbsp; Due: ' + dueStr + '</div>' +
+      '</div>' +
+      '<div class="row" style="gap:8px">' +
+        '<button class="btn ghost sm" onclick="gstPrintReturn(\''+period+'\')">Print MIRA 205</button>' +
+        '<button class="btn accent sm" onclick="gstFileReturn(\''+period+'\')">Record as filed</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">' +
+      // Output tax card
+      '<div class="card pad">' +
+        '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin-bottom:10px">&#9650; Output Tax (Sales)</div>' +
+        '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13.5px;border-bottom:1px solid var(--line)"><span>Taxable sales</span><span class="mono">' + money(res.totalSales) + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13.5px;border-bottom:1px solid var(--line)"><span>GST charged (' + gstRate() + '%)</span><span class="mono" style="font-weight:700;color:#1d4ed8">' + money(res.outputTax) + '</span></div>' +
+        '<div style="font-size:12px;color:var(--ink-soft);margin-top:8px">' + res.invoiceCount + ' invoice(s) in period</div>' +
+      '</div>' +
+      // Input tax card
+      '<div class="card pad">' +
+        '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin-bottom:10px">&#9660; Input Tax (Purchases)</div>' +
+        '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13.5px;border-bottom:1px solid var(--line)"><span>Purchases</span><span class="mono">' + money(res.totalPurchases) + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13.5px;border-bottom:1px solid var(--line)"><span>GST claimed</span><span class="mono" style="font-weight:700;color:var(--accent-ink)">' + money(res.inputTax) + '</span></div>' +
+        '<div style="font-size:12px;color:var(--ink-soft);margin-top:8px">' + res.expenseCount + ' expense(s) with GST &nbsp;<a class="linkish" onclick="_gstTab=\'expenses\';viewGST()">Add input tax →</a></div>' +
+      '</div>' +
+    '</div>' +
+    posCard +
+    '<div class="card pad" style="margin-top:14px;font-size:12.5px;color:var(--ink-soft)">' +
+      '<b style="color:var(--ink)">File via MIRAconnect</b> &nbsp;·&nbsp; ' +
+      '<a href="https://mirac.mira.gov.mv" target="_blank" class="linkish">mirac.mira.gov.mv</a> &nbsp;·&nbsp; ' +
+      'Form: <b>MIRA 205</b> &nbsp;·&nbsp; MIRA hotline: <b>1415</b>' +
+    '</div>';
+}
+
+/* ---- print MIRA 205 layout ---- */
+function gstPrintReturn(period) {
+  var range = gstPeriodRange(period); if (!range) return;
+  var res   = calcGstReturn(range.start, range.end);
+  var gs    = gstSettings();
+  var s     = State.db.settings;
+  var row   = function(label, val, bold) {
+    return '<tr' + (bold?' style="font-weight:700"':'') + '>' +
+      '<td style="padding:8px 12px;border-bottom:1px solid #e4ded2">' + label + '</td>' +
+      '<td style="padding:8px 12px;border-bottom:1px solid #e4ded2;text-align:right;font-family:monospace">' + val + '</td>' +
+    '</tr>';
+  };
+  var win = window.open('','_blank');
+  win.document.write('<html><head><title>MIRA 205 — ' + gstPeriodLabel(period) + '</title>' +
+    '<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:40px auto;font-size:14px;color:#1b1d24}' +
+    'h1{font-size:22px;margin-bottom:4px}table{width:100%;border-collapse:collapse}' +
+    '.head{display:flex;justify-content:space-between;border-bottom:2px solid #1d4ed8;padding-bottom:12px;margin-bottom:20px}' +
+    '.meta{font-size:12.5px;color:#555}.section{font-weight:700;background:#f6f3ec;padding:6px 12px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#555}' +
+    '@media print{body{margin:20px}}</style></head><body>');
+  win.document.write(
+    '<div class="head">' +
+      '<div><h1>GST Return — MIRA 205</h1><div class="meta">General Sector</div></div>' +
+      '<div style="text-align:right"><div style="font-size:18px;font-weight:700;color:#1d4ed8">MIRA 205</div>' +
+        '<div class="meta">Taxable period: ' + gstPeriodLabel(period) + '</div>' +
+        '<div class="meta">' + fmtDate(range.start) + ' to ' + fmtDate(range.end) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<table><tbody>' +
+      '<tr><td colspan="2" class="section">Taxpayer Information</td></tr>' +
+      row('Business name',esc(s.businessName||''))+
+      row('GST Registration No.',esc(gs.gstNumber||'—'))+
+      row('Filing period',gstPeriodLabel(period))+
+      row('Due date',fmtDate(range.dueDate))+
+      '<tr><td colspan="2" class="section">Part A — Output Tax</td></tr>' +
+      row('1. Standard rated supplies (taxable sales)',money(res.totalSales))+
+      row('2. Output tax on standard rated supplies ('+gstRate()+'%)',money(res.outputTax),true)+
+      '<tr><td colspan="2" class="section">Part B — Input Tax</td></tr>' +
+      row('3. Standard rated purchases',money(res.totalPurchases))+
+      row('4. Input tax on purchases',money(res.inputTax),true)+
+      '<tr><td colspan="2" class="section">Part C — Net GST</td></tr>' +
+      row('5. Net GST (Output tax minus Input tax)',money(res.netGst),true)+
+      (res.payable>0 ? row('6. GST payable to MIRA',money(res.payable),true) : row('6. Input tax credit (carry forward)',money(res.carryFwd),true))+
+    '</tbody></table>' +
+    '<div style="margin-top:28px;font-size:12px;color:#999;border-top:1px solid #e4ded2;padding-top:14px">' +
+      'Generated by QuoteMaster &mdash; file via <a href="https://mirac.mira.gov.mv">MIRAconnect</a> &mdash; MIRA hotline: 1415' +
+    '</div></body></html>');
+  win.document.close();
+  win.print();
+}
+
+/* ---- record as filed ---- */
+function gstFileReturn(period) {
+  var range = gstPeriodRange(period); if (!range) return;
+  var res   = calcGstReturn(range.start, range.end);
+  var existing = (State.db.gstSettings.filedReturns||[]).find(function(r){ return r.period===period; });
+  if (existing) { toast('This period is already recorded as filed.'); return; }
+  openModal('Record GST Return as Filed',
+    '<div class="fgrid">' +
+      '<div class="field full"><label>Period</label><div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper)">'+gstPeriodLabel(period)+' — Due '+fmtDate(range.dueDate)+'</div></div>' +
+      '<div class="field"><label>Date filed</label><input type="date" id="gst_filed_date" value="'+todayISO()+'"></div>' +
+      '<div class="field"><label>Amount paid (if payable)</label><input type="number" step="0.01" id="gst_paid_amt" value="'+res.payable+'"></div>' +
+      '<div class="field"><label>MIRA reference / receipt no.</label><input id="gst_ref" placeholder="Optional"></div>' +
+    '</div>',
+    [{label:'Cancel',cls:'ghost',fn:closeModal},{label:'Save filing record',cls:'accent',fn:function(){
+      if (!State.db.gstSettings.filedReturns) State.db.gstSettings.filedReturns=[];
+      State.db.gstSettings.filedReturns.unshift({
+        period:period, periodLabel:gstPeriodLabel(period),
+        filedDate:document.getElementById('gst_filed_date').value,
+        amountPaid:+(document.getElementById('gst_paid_amt').value)||0,
+        reference:document.getElementById('gst_ref').value,
+        snapshot:res
+      });
+      persist(); closeModal(); toast('GST return recorded as filed.');
+      _gstTab='returns'; viewGST();
+    }}]
+  );
+}
+
+/* ---- returns history ---- */
+function gstRenderReturns(panel) {
+  var filedReturns = (gstSettings().filedReturns)||[];
+  if (!filedReturns.length) {
+    panel.innerHTML = emptyBox('No filed returns yet',
+      'Generate a MIRA 205 report and click "Record as filed" to keep a record here.') +
+      '<div style="margin-top:12px"><button class="btn accent sm" onclick="_gstTab=\'overview\';viewGST()">← Back to overview</button></div>';
+    return;
+  }
+  var rows = filedReturns.map(function(r) {
+    var net = r.snapshot ? r.snapshot.netGst : 0;
+    var status = net >= 0
+      ? '<span style="color:#1d4ed8;font-weight:600">Paid ' + money(r.amountPaid) + '</span>'
+      : '<span style="color:var(--accent-ink);font-weight:600">Credit ' + money(Math.abs(net)) + '</span>';
+    return '<tr>' +
+      '<td style="font-weight:600">' + esc(r.periodLabel) + '</td>' +
+      '<td class="muted">' + fmtDate(r.filedDate) + '</td>' +
+      '<td>' + status + '</td>' +
+      '<td class="mono muted" style="font-size:12px">' + esc(r.reference||'—') + '</td>' +
+      '<td><button class="btn ghost tiny" onclick="gstPrintReturn(\''+r.period+'\')">Print 205</button></td>' +
+    '</tr>';
+  }).join('');
+  panel.innerHTML = '<div class="tbl"><table>' +
+    '<thead><tr><th>Period</th><th>Filed date</th><th>Position</th><th>Reference</th><th></th></tr></thead>' +
+    '<tbody>' + rows + '</tbody>' +
+    '</table></div>';
+}
+
+/* ---- input tax on expenses ---- */
+function gstRenderInputTax(panel) {
+  var exps = (State.db.expenses||[]).slice().sort(function(a,b){return b.date>a.date?1:-1;});
+  var rate = gstRate();
+  var helpHtml =
+    '<div class="card pad" style="background:var(--accent-soft);border-color:var(--accent);margin-bottom:12px;font-size:13.5px">' +
+      '<b>Claiming Input Tax on Purchases</b><br>' +
+      'To claim GST you paid on business expenses, tick the "GST incl." checkbox on each expense and QuoteMaster will calculate the reclaimable amount. ' +
+      'You must have a valid tax invoice to claim input tax.' +
+    '</div>';
+  if (!exps.length) { panel.innerHTML = helpHtml + emptyBox('No expenses yet','Add expenses and mark them as GST-inclusive to track input tax.'); return; }
+  var rows = exps.map(function(e,ix) {
+    var inclAmt = e.gstInclusive ? +(e.amount * rate / (100+rate)).toFixed(2) : (e.inputTax||0);
+    return '<tr>' +
+      '<td class="muted">' + fmtDate(e.date) + '</td>' +
+      '<td><b>' + esc(e.category||'—') + '</b><div class="muted" style="font-size:12px">' + esc(e.desc||'') + '</div></td>' +
+      '<td class="mono">' + money(e.amount) + '</td>' +
+      '<td style="text-align:center">' +
+        '<input type="checkbox"' + (e.gstInclusive?' checked':'') + ' onchange="gstToggleExpense('+ix+',this.checked)">' +
+      '</td>' +
+      '<td class="mono" style="font-weight:600;color:var(--accent-ink)">' + (inclAmt>0?money(inclAmt):'—') + '</td>' +
+    '</tr>';
+  }).join('');
+  var totalInputTax = exps.reduce(function(s,e){
+    return s + (e.gstInclusive ? +(e.amount*rate/(100+rate)).toFixed(2) : (+(e.inputTax)||0));
+  }, 0);
+  panel.innerHTML = helpHtml +
+    '<div class="tbl"><table>' +
+      '<thead><tr><th>Date</th><th>Expense</th><th class="right">Amount</th><th style="text-align:center">GST incl.</th><th class="right">Input tax</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+      '<tfoot><tr style="background:#fbf9f3;font-weight:700"><td colspan="4" style="padding:10px 14px;text-align:right">Total reclaimable input tax</td>' +
+        '<td style="padding:10px 14px;text-align:right;font-family:monospace;color:var(--accent-ink)">' + money(totalInputTax) + '</td></tr></tfoot>' +
+    '</table></div>';
+}
+function gstToggleExpense(ix, checked) {
+  var exps = State.db.expenses||[];
+  var exp  = exps.slice().sort(function(a,b){return b.date>a.date?1:-1;})[ix];
+  if (!exp) return;
+  var origIx = exps.findIndex(function(e){return e.id===exp.id;});
+  if (origIx>=0) { exps[origIx].gstInclusive = checked; persist(); }
+  gstRenderInputTax(document.getElementById('gstPanel'));
+}
+
+/* ---- settings ---- */
+function gstRenderSettings(panel) {
+  var gs = gstSettings();
+  panel.innerHTML =
+    '<div class="card pad">' +
+      '<h3 style="margin-bottom:14px">GST Registration & Settings</h3>' +
+      '<div class="fgrid">' +
+        '<div class="field full"><label>GST registered?</label>' +
+          '<select id="gst_reg">' +
+            '<option value="1"' + (gs.registered?' selected':'') + '>Yes — I am registered for GST</option>' +
+            '<option value="0"' + (!gs.registered?' selected':'') + '>No — not registered</option>' +
+          '</select></div>' +
+        '<div class="field"><label>GST Registration number</label>' +
+          '<input id="gst_no" value="' + esc(gs.gstNumber||'') + '" placeholder="e.g. GST-XXXXXXXX"></div>' +
+        '<div class="field"><label>Sector</label>' +
+          '<select id="gst_sector">' +
+            '<option value="general"' + (gs.sector==='general'?' selected':'') + '>General (8%)</option>' +
+            '<option value="tourism"' + (gs.sector==='tourism'?' selected':'') + '>Tourism (17%)</option>' +
+          '</select></div>' +
+        '<div class="field"><label>Filing frequency</label>' +
+          '<select id="gst_freq">' +
+            '<option value="quarterly"' + (gs.filingFrequency==='quarterly'?' selected':'') + '>Quarterly — avg sales ≤ MVR 1M/month</option>' +
+            '<option value="monthly"'  + (gs.filingFrequency==='monthly'?' selected':'') + '>Monthly — avg sales &gt; MVR 1M/month</option>' +
+          '</select></div>' +
+      '</div>' +
+      '<button class="btn accent" style="margin-top:8px" onclick="gstSaveSettings()">Save GST settings</button>' +
+    '</div>' +
+    '<div class="card pad" style="margin-top:14px;font-size:13px;color:var(--ink-soft)">' +
+      '<b style="color:var(--ink)">MIRA key rules</b><br>' +
+      '&#x2022; <cite index="4-1">GST rate: <b>8%</b> (General sector from 1 Jan 2023) · <b>17%</b> (Tourism from 1 Jul 2025)</cite><br>' +
+      '&#x2022; <cite index="6-1">File and pay by <b>28th of the month</b> after the taxable period ends</cite><br>' +
+      '&#x2022; <cite index="10-1">Monthly if avg sales &gt; MVR 1 million/month. Quarterly otherwise (Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec)</cite><br>' +
+      '&#x2022; File online at <a href="https://mirac.mira.gov.mv" target="_blank" class="linkish">MIRAconnect</a> using form MIRA 205 &nbsp;&middot;&nbsp; Hotline: <b>1415</b>' +
+    '</div>';
+}
+function gstSaveSettings() {
+  var s = State.db.gstSettings;
+  s.registered      = document.getElementById('gst_reg').value === '1';
+  s.gstNumber       = document.getElementById('gst_no').value.trim();
+  s.sector          = document.getElementById('gst_sector').value;
+  s.filingFrequency = document.getElementById('gst_freq').value;
+  persist();
+  toast('GST settings saved');
+  viewGST();
+}
+
+/* ============================================================
    EXPENSES
    ============================================================ */
 const EXP_CATS=['Rent & Utilities','Salaries & Wages','Equipment & Supplies','Marketing & Advertising','Transport & Delivery','Food & Entertainment','Maintenance & Repairs','Taxes & Fees','Stock & Inventory','Other'];
@@ -3318,10 +3978,11 @@ const FEATURE_TOGGLE_DEFS=[
   {key:'stock',       label:'Stock management & reorder alerts'},
   {key:'multiEmployee',label:'Unlimited employees (beyond free limit)'},
   {key:'expenses',    label:'Expense tracking'},
+  {key:'gst',        label:'GST tracking & returns (MIRA 205)'},
   {key:'zakat',       label:'Zakat calculator'},
   {key:'deliveries',  label:'Delivery notes'},
   {key:'email',       label:'Email sending & inbox'},
-  {key:'team',        label:'Team portal access (multi-user)'}
+  {key:'team',        label:'Team / multi-user portal access'}
 ];
 function renderFeatureToggles(){
   const host=document.getElementById('featToggleList');
@@ -3359,24 +4020,36 @@ async function saveAdminSettings(){
    UPGRADE / PAYMENT (demo unlock; production -> Stripe checkout)
    ============================================================ */
 function openUpgrade(){
+  const cfg=_platformCfg;
+  const sym=cfg.currency||State.db.settings.currencySymbol||'Rf';
+  const price=cfg.proPrice||299;
+  const annualPrice=cfg.proAnnualPrice||0;
+  const annualLabel=cfg.annualLabel||'Save 20%';
+  // Build pro feature list dynamically from what's actually Pro-only
+  const pf=proFeatures();
+  const featureNames={stock:'Stock management & reorder alerts',multiEmployee:'Unlimited employees',
+    expenses:'Expense tracking & P&L',zakat:'Zakat al-māl calculator',
+    deliveries:'Delivery notes',email:'Email sending & inbox',team:'Team / multi-user access'};
+  const proList=Object.entries(pf).filter(([k,v])=>v).map(([k])=>featureNames[k]||k).filter(Boolean);
+  if(!proList.length)proList.push('Delivery management','Email sending & receiving','Team access');
   openModal('Upgrade to QuoteMaster Pro',`
    <div class="plans">
-     <div class="plan"><h4>Free</h4><div class="price">Rf 0</div><div class="muted">forever</div>
-       <ul>${['Item catalogue','Unlimited quotations','Unlimited invoices','Branded PDF layouts','Business profile & logo'].map(f=>`<li>${svg('check')}${f}</li>`).join('')}</ul>
+     <div class="plan"><h4>Free</h4><div class="price">${sym} 0</div><div class="muted">forever</div>
+       <ul>${['Product catalogue','Unlimited quotations','Unlimited invoices','Branded PDF layouts','Business profile & logo'].map(f=>`<li>${svg('check')}${f}</li>`).join('')}</ul>
        <button class="btn ghost block" disabled>${isPro()?'Downgrade':'Current plan'}</button></div>
-     <div class="plan feat"><h4>Pro <span class="badge pro">RECOMMENDED</span></h4><div class="price">Rf 299<span style="font-size:15px;font-weight:500" class="muted">/mo</span></div><div class="muted">everything in Free, plus</div>
-       <ul>${['Delivery management & notes','Email sending & receiving','Recurring invoices','Payment reminders','Reports & analytics','Multi-user (team)'].map(f=>`<li>${svg('check')}${f}</li>`).join('')}</ul>
-       <button class="btn amber block" onclick="startCheckout()">${isPro()?'Pro active ✓':'Upgrade now'}</button></div>
+     <div class="plan feat"><h4>Pro <span class="badge pro">RECOMMENDED</span></h4>
+       <div class="price">${sym} ${price.toLocaleString()}<span style="font-size:15px;font-weight:500" class="muted">/mo</span></div>
+       ${annualPrice?`<div class="muted" style="font-size:12.5px;margin-top:-6px">${sym} ${annualPrice.toLocaleString()}/yr · ${esc(annualLabel)}</div>`:''}
+       <div class="muted">Everything in Free, plus:</div>
+       <ul>${proList.map(f=>`<li>${svg('check')}${f}</li>`).join('')}</ul>
+       <button class="btn amber block" onclick="startCheckout()">${isPro()?'Pro active ✓':'Upgrade now — '+sym+' '+price+'/mo'}</button></div>
    </div>
-   <p class="muted" style="font-size:12px;margin-top:14px;text-align:center">In production this opens Stripe Checkout. Here it unlocks Pro instantly so you can explore the features.</p>`,
+   <p class="muted" style="font-size:12px;margin-top:14px;text-align:center">Contact <a class="linkish" href="mailto:billing@wadde.online">billing@wadde.online</a> to upgrade or manage your subscription.</p>`,
    [{label:'Close',cls:'ghost',fn:closeModal}],'lg');
 }
 async function startCheckout(){
   if(isPro()){closeModal();return;}
-  toast('Opening secure checkout…');
-  const r=await call('createCheckout');
-  if(r.ok&&r.url){ window.location.href=r.url; }
-  else { toast(r.error||'Could not start checkout'); }
+  toast('Contact billing@wadde.online to activate Pro');
 }
 
 /* ============================================================
