@@ -19,7 +19,7 @@
   --radius:14px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%}
+html,body{height:100%;overflow:hidden}
 body{font-family:'Hanken Grotesk',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
 .mono{font-family:'Spline Sans Mono',monospace;font-feature-settings:"tnum"}
 .serif{font-family:'Fraunces',serif}
@@ -64,9 +64,9 @@ h1,h2,h3{font-weight:600;letter-spacing:-.01em}
 .err{color:var(--danger);font-size:13px;margin-top:8px;min-height:18px}
 
 /* ---------- App shell ---------- */
-#app{display:none;min-height:100vh}
-.layout{display:grid;grid-template-columns:218px 1fr;min-height:100vh}
-.side{background:#13241f;color:#cfe3db;padding:14px 11px;display:flex;flex-direction:column;gap:2px;position:sticky;top:0;height:100vh}
+#app{display:none;height:100vh;overflow:hidden}
+.layout{display:grid;grid-template-columns:218px 1fr;height:100vh;overflow:hidden}
+.side{background:#13241f;color:#cfe3db;padding:14px 11px;display:flex;flex-direction:column;gap:2px;height:100vh;overflow-y:auto;overflow-x:hidden;flex-shrink:0}
 .side .wm{font-family:'Fraunces',serif;font-size:17px;font-weight:600;color:#fff;display:flex;align-items:center;gap:8px;padding:4px 7px 12px}
 .side .wm .brandmark{background:var(--accent)}
 .nav-group{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#6f9286;margin:11px 8px 4px;font-weight:700}
@@ -83,8 +83,8 @@ h1,h2,h3{font-weight:600;letter-spacing:-.01em}
 .plan-card .pt{font-size:12px;color:#9fc0b6}
 .plan-card .pn{font-weight:700;color:#fff;font-size:14px;margin:2px 0 8px}
 
-.main{display:flex;flex-direction:column;min-height:100vh}
-.topbar{height:62px;border-bottom:1px solid var(--line);background:var(--card);display:flex;align-items:center;padding:0 26px;gap:14px;position:sticky;top:0;z-index:20}
+.main{display:flex;flex-direction:column;height:100vh;overflow:hidden;flex:1;min-width:0}
+.topbar{height:62px;border-bottom:1px solid var(--line);background:var(--card);display:flex;align-items:center;padding:0 26px;gap:14px;flex-shrink:0;z-index:20}
 .topbar .page-title{font-size:18px;font-weight:600}
 .topbar .spacer{flex:1}
 .biz-chip{display:flex;align-items:center;gap:9px;padding:5px 10px 5px 6px;border:1px solid var(--line);border-radius:30px;background:var(--paper)}
@@ -92,7 +92,7 @@ h1,h2,h3{font-weight:600;letter-spacing:-.01em}
 .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.03em}
 .badge.free{background:var(--line);color:var(--ink-soft)}
 .badge.pro{background:var(--amber-soft);color:var(--amber)}
-.content{padding:26px;max-width:1180px;width:100%}
+.content{padding:26px;max-width:1180px;width:100%;flex:1;overflow-y:auto;overflow-x:hidden}
 
 /* ---------- Common UI ---------- */
 .row{display:flex;gap:12px;align-items:center}
@@ -613,12 +613,12 @@ function svg(name,w=16){return `<svg viewBox="0 0 24 24" width="${w}" height="${
    ► No backend deployment ever needed.
    ============================================================ */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD5NPIUGMbs8qQfU-PekQMMT2EWDzNBj-4",
-  authDomain: "quote-master-eed65.firebaseapp.com",
-  projectId: "quote-master-eed65",
-  storageBucket: "quote-master-eed65.firebasestorage.app",
+  apiKey:            "AIzaSyD5NPIUGMbs8qQfU-PekQMMT2EWDzNBj-4",
+  authDomain:        "quote-master-eed65.firebaseapp.com",
+  projectId:         "quote-master-eed65",
+  storageBucket:     "quote-master-eed65.firebasestorage.app",
   messagingSenderId: "530335083320",
-  appId: "1:530335083320:web:9828da5df710ce26ae6fcd"
+  appId:             "1:530335083320:web:9828da5df710ce26ae6fcd"
 };
 const ADMIN_EMAIL = "vaddever@gmail.com";
 const TRIAL_DAYS  = 30;
@@ -675,9 +675,16 @@ async function loadFirebaseUser(user) {
     ]);
     State.db = bizSnap.exists ? bizSnap.data() : starterDb(user.displayName||'', user.email);
     const pi = planSnap.exists ? planSnap.data() : null;
-    State.db.settings.plan = computePlan(pi);
-    State.trialDaysLeft = computeDaysLeft(pi);
-    State.isAdmin = (user.email||'').toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    const isAdmin = (user.email||'').toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    State.isAdmin = isAdmin;
+    if (isAdmin) {
+      // Admin always has full Pro access
+      State.db.settings.plan = 'pro';
+      State.trialDaysLeft = 0;
+    } else {
+      State.db.settings.plan = computePlan(pi);
+      State.trialDaysLeft = computeDaysLeft(pi);
+    }
     State.user = { email: user.email, uid: user.uid };
     _platformCfg = (cfgSnap && cfgSnap.exists) ? cfgSnap.data() : {};
     document.getElementById('auth').style.display = 'none';
@@ -3823,7 +3830,7 @@ function resetPosToken(){confirmDel('Reset the POS link? All staff will need to 
    ============================================================ */
 let _adminTab='users';
 function num(n){return Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
-let _adminUsers=[];
+var _adminUsers=[];
 async function viewAdmin(){
   const c=document.getElementById('content');
   c.innerHTML='<div class="card pad muted">Loading portal data…</div>';
@@ -3835,7 +3842,7 @@ async function viewAdmin(){
         plan:computePlan(data), expiry:data.trialExpiry||null, invoices:0, collected:0, quotes:0};
     });
     renderAdminView();
-  }catch(e){c.innerHTML='<div class="card pad">'+esc('Error: '+e.message)+'<br><small>Make sure Firestore rules allow admin read on plan_info.</small></div>';}
+  }catch(e){c.innerHTML='<div class="card pad">'+esc('Error: '+e.message)+'<br><small>Firestore read failed. Go to Firebase Console → Firestore → Rules and publish the rules from firestore.rules. MIRA hotline for testing: check admin email matches ADMIN_EMAIL.</small></div>';}
 }
 function renderAdminView(){
   const c=document.getElementById('content');
@@ -3900,7 +3907,7 @@ function adminDelete(userId){
 }
 
 /* ---- Platform Settings ---- */
-let _adminCfg={};
+var _adminCfg={};
 async function renderAdminSettings(){
   const p=document.getElementById('adminPanel');
   if(!p){console.warn('adminPanel not found');return;}
