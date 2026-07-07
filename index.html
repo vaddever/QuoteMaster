@@ -634,7 +634,7 @@ firebase.initializeApp(FIREBASE_CONFIG);
 const _auth = firebase.auth();
 const _fdb  = firebase.firestore();
 
-let _saveT = null;
+var _saveT = null;
 function persist() {
   clearTimeout(_saveT);
   _saveT = setTimeout(async () => {
@@ -717,8 +717,8 @@ function fbErrMsg(e) {
     'auth/too-many-requests':'Too many attempts. Try again later.'}[e.code] || e.message || 'Something went wrong.');
 }
 
-let State={user:null,db:null,view:'dashboard',isAdmin:false,trialDaysLeft:0};
-let _platformCfg={};
+var State={user:null,db:null,view:'dashboard',isAdmin:false,trialDaysLeft:0};
+var _platformCfg={};
 
 function isPro(){ const p=State.db?.settings?.plan; return p==='pro'||p==='trial'; }
 
@@ -800,7 +800,7 @@ function calcDoc(doc,db){
 /* ============================================================
    AUTH
    ============================================================ */
-let authMode='register';
+var authMode='register';
 function setAuthMode(m){
   authMode=m;
   document.getElementById('regFields').style.display=m==='register'?'block':'none';
@@ -1151,7 +1151,7 @@ function itemCards(items){
       </div>
     </div>`;}).join('')}</div>`;
 }
-let itemSearch='';
+var itemSearch='';
 function viewItems(){
   const items=State.db.items.filter(i=>(i.name+(i.sku||'')+(i.barcode||'')).toLowerCase().includes(itemSearch.toLowerCase()));
   const totalCost=State.db.items.filter(i=>i.trackStock!==false&&i.stockQty>0).reduce((s,i)=>s+(i.stockQty||0)*(i.costPrice||0),0);
@@ -1284,7 +1284,7 @@ function stockBadgeHtml(i){
   const cls=q<=0?'stk-out':i.reorderLevel>0&&q<=i.reorderLevel?'stk-low':'stk-good';
   return`<span class="stk-badge ${cls}">${q<=0?'Out of stock':q+' '+esc(i.unit||'pc')}</span>`;
 }
-let _stockTab='overview';
+var _stockTab='overview';
 function viewStock(){
   const tracked=(State.db.items||[]).filter(i=>i.trackStock!==false);
   const totalCost=tracked.reduce((s,i)=>s+(i.stockQty||0)*(i.costPrice||0),0);
@@ -1384,7 +1384,7 @@ function renderStockMovements(){
     </tbody></table></div>`;
   }
 }
-let _auditRows={};
+var _auditRows={};
 function renderStockAudit(tracked){
   const p=document.getElementById('stockPanel');
   _auditRows={};
@@ -1487,7 +1487,7 @@ function updateStockAdjustBalance(){
 /* ============================================================
    CUSTOMERS
    ============================================================ */
-let custSearch='';
+var custSearch='';
 function viewCustomers(){
   const all=State.db.customers||(State.db.customers=[]);
   const docsOf=name=>State.db.quotations.concat(State.db.invoices).filter(d=>d.customer&&d.customer.name===name).length;
@@ -1541,7 +1541,7 @@ function quoteForCustomer(id){
 /* ============================================================
    QUOTATIONS / INVOICES (shared)
    ============================================================ */
-let docSearch={quote:'',invoice:''};
+var docSearch={quote:'',invoice:''};
 function viewDocs(type){
   const coll=type==='quote'?State.db.quotations:State.db.invoices;
   const list=coll.filter(d=>((d.number||'')+(d.customer.name||'')).toLowerCase().includes(docSearch[type].toLowerCase()))
@@ -1575,7 +1575,7 @@ function statusSelect(type,d){
 }
 function setStatus(type,id,st){const coll=type==='quote'?State.db.quotations:State.db.invoices;const d=coll.find(x=>x.id===id);d.status=st;persist();}
 
-let editing=null; // {type, doc}
+var editing=null; // {type, doc}
 function openDocEditor(type,id){
   const coll=type==='quote'?State.db.quotations:State.db.invoices;
   let doc;
@@ -1743,7 +1743,7 @@ function buildDocHtml(type,d){
 /* ============================================================
    DELIVERIES (PRO)
    ============================================================ */
-let delSearch='';
+var delSearch='';
 function viewDeliveries(){
   const list=State.db.deliveries.filter(d=>((d.number||'')+(d.customer.name||'')).toLowerCase().includes(delSearch.toLowerCase())).sort((a,b)=>b.number<a.number?-1:1);
   document.getElementById('content').innerHTML=`
@@ -1763,7 +1763,7 @@ function viewDeliveries(){
 }
 function delStatusSelect(d){const opts=['pending','dispatched','delivered','cancelled'];
   return `<select class="pill ${d.status}" style="border:none;font-weight:600;cursor:pointer" onchange="const x=State.db.deliveries.find(z=>z.id==='${d.id}');x.status=this.value;persist();this.className='pill '+this.value">${opts.map(o=>`<option ${d.status===o?'selected':''}>${o}</option>`).join('')}</select>`;}
-let editingDel=null;
+var editingDel=null;
 function openDeliveryEditor(id){
   let d=id?JSON.parse(JSON.stringify(State.db.deliveries.find(x=>x.id===id))):newDoc('delivery',State.db);
   editingDel={id,d};
@@ -1823,7 +1823,7 @@ function printDelivery(id){
 /* ============================================================
    EMAIL (PRO) — demo: queues to Outbox. Production: backend sends.
    ============================================================ */
-let emailTab='outbox';
+var emailTab='outbox';
 function viewEmail(){
   document.getElementById('content').innerHTML=`
     <div class="between" style="margin-bottom:14px"><div class="tabs">
@@ -3390,7 +3390,7 @@ function gstSaveSettings() {
    ============================================================ */
 const EXP_CATS=['Rent & Utilities','Salaries & Wages','Equipment & Supplies','Marketing & Advertising','Transport & Delivery','Food & Entertainment','Maintenance & Repairs','Taxes & Fees','Stock & Inventory','Other'];
 const EXP_EMOJI={'Rent & Utilities':'🏢','Salaries & Wages':'👥','Equipment & Supplies':'🔧','Marketing & Advertising':'📣','Transport & Delivery':'🚚','Food & Entertainment':'🍽️','Maintenance & Repairs':'🔨','Taxes & Fees':'📋','Stock & Inventory':'📦','Other':'💼'};
-let expPeriod='month', expCat='All';
+var expPeriod='month', expCat='All';
 function viewExpenses(){
   if(!State.db){toast("Loading… please wait");return;}
   if(!State.db.expenses)State.db.expenses=[];
@@ -3521,7 +3521,7 @@ function stopScan(){
 /* ============================================================
    EMPLOYEES
    ============================================================ */
-const EMP_FREE_LIMIT = 5;
+var EMP_FREE_LIMIT = 5;
 function viewEmployees(){
   if(!State.db){toast("Loading… please wait");return;}
   const emps=State.db.employees||[];
@@ -3569,7 +3569,7 @@ function delEmployee(id){confirmDel('Delete this employee?',()=>{State.db.employ
 /* ============================================================
    POS — POINT OF SALE
    ============================================================ */
-let posCart=[], posCashier=null, posPayMethod='cash', _posTab='items';
+var posCart=[], posCashier=null, posPayMethod='cash', _posTab='items';
 function viewPOS(){
   if(!State.db){toast("Loading… please wait");return;}
   const emps=(State.db.employees||[]).filter(e=>e.active!==false);
@@ -3594,7 +3594,7 @@ function showEmpLogin(emps){
     <p class="muted" style="font-size:12px;margin-top:20px">Not listed? Ask the admin to add you as an employee.</p>
   </div>`;
 }
-let _pinInput='',_pinEmpId='';
+var _pinInput='',_pinEmpId='';
 function empPinPrompt(id){
   const e=(State.db.employees||[]).find(x=>x.id===id);if(!e)return;
   if(!e.pin){posCashier=e;renderPOS();return;}
@@ -3671,7 +3671,7 @@ function renderPOS(){
     </div>`;
   renderIcons(document.getElementById('content'));
 }
-let _posSearch='';
+var _posSearch='';
 function addToCart(itemId){
   const item=State.db.items.find(i=>i.id===itemId);if(!item)return;
   // Check stock availability
