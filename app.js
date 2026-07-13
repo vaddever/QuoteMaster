@@ -604,7 +604,9 @@ function viewItems(){
         const qty=i.stockQty||0;
         const stkCls=!tracked?'':qty<=0?'stk-out':i.reorderLevel>0&&qty<=i.reorderLevel?'stk-low':'stk-good';
         return`<tr>
-        <td><div style="font-weight:600">${esc(i.name)}</div>${i.desc?`<div class="muted" style="font-size:12px">${esc(i.desc)}</div>`:''}</td>
+        <td><div style="display:flex;align-items:center;gap:10px">
+          ${i.image?`<img src="${i.image}" style="width:36px;height:36px;object-fit:cover;border-radius:7px;flex-shrink:0">`:''}
+          <div><div style="font-weight:600">${esc(i.name)}</div>${i.desc?`<div class="muted" style="font-size:12px">${esc(i.desc)}</div>`:''}</div></div></td>
         <td class="mono muted" style="font-size:12px">${esc(i.sku||'—')}${i.barcode?`<div>${svg('barcode',12)} ${esc(i.barcode)}</div>`:''}</td>
         <td>${esc(i.unit||'pc')}</td>
         <td class="right mono muted">${i.costPrice?money(i.costPrice):'—'}</td>
@@ -625,6 +627,21 @@ function openItemEditor(id){
   const it=id?State.db.items.find(i=>i.id===id):{name:'',sku:'',barcode:'',desc:'',unitPrice:'',costPrice:'',unit:'pc',taxable:true};
   openModal(`${id?'Edit':'New'} product`,`
     ${uomDatalist()}
+    <!-- Product image upload -->
+    <div class="field full" style="margin-bottom:12px">
+      <label>Product image (optional)</label>
+      <div id="item_img_drop" style="border:2px dashed var(--line);border-radius:12px;padding:14px;text-align:center;cursor:pointer;background:var(--paper);transition:.15s;position:relative"
+        onclick="document.getElementById('item_img_input').click()"
+        ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+        ondragleave="this.style.borderColor=''"
+        ondrop="event.preventDefault();this.style.borderColor='';handleItemImage(event.dataTransfer.files[0])">
+        ${it.image
+          ? '<img id="item_img_prev" src="'+it.image+'" style="max-height:100px;border-radius:8px;object-fit:contain">'
+          : '<div id="item_img_prev" style="font-size:28px;margin-bottom:4px">🖼</div><div style="font-size:13px;font-weight:600">Drag &amp; drop or tap to upload</div><div style="font-size:12px;color:var(--ink-soft)">JPG, PNG, WebP · max 3MB</div>'}
+      </div>
+      <input type="file" id="item_img_input" accept="image/*" style="display:none" onchange="handleItemImage(this.files[0])">
+      <div id="item_img_name" style="font-size:12px;color:var(--accent-ink);margin-top:4px">${it.image?'Image attached — tap to replace':''}</div>
+    </div>
     <div class="fgrid">
       <div class="field full"><label>Product name *</label><input id="i_name" value="${esc(it.name)}" placeholder="e.g. A4 Copy Paper"></div>
       <div class="field"><label>SKU / internal code</label><input id="i_sku" value="${esc(it.sku||'')}"></div>
@@ -666,6 +683,7 @@ function openItemEditor(id){
       const newStockQty=trackStock?+val('i_sqty')||0:0;
       const oldStockQty=id?((State.db.items.find(i=>i.id===id)||{}).stockQty||0):0;
       const rec={id:id||uid(),name,sku:val('i_sku'),barcode:val('i_barcode'),unit:val('i_unit')||'pc',desc:val('i_desc'),
+        image:window._itemImgDataUrl||(it&&it.image)||null,
         costPrice:+val('i_cost')||0,unitPrice:sell,taxable:val('i_tax')==='1',
         trackStock,stockQty:newStockQty,reorderLevel:trackStock?+val('i_reord')||0:0,reorderQty:trackStock?+val('i_reordqty')||0:0};
       if(id){const ix=State.db.items.findIndex(i=>i.id===id);State.db.items[ix]=rec;}else State.db.items.push(rec);
@@ -677,6 +695,7 @@ function openItemEditor(id){
       }
       persist();closeModal();viewItems();toast(id?'Product updated':'Product added');
     }}]);
+  window._itemImgDataUrl=null; // reset on open
   setTimeout(()=>{if(it.costPrice&&it.unitPrice)calcItemFields();},80);
 }
 function calcItemFields(){
@@ -2994,6 +3013,32 @@ function openEmpEditor(id){
       persist();closeModal();viewEmployees();toast(id?'Employee updated':'Employee added');
     }}]);
 }
+
+function handleItemImage(file){
+  if(!file)return;
+  if(!file.type.startsWith('image/')){toast('Please select an image file');return;}
+  if(file.size>3*1024*1024){toast('Image too large — max 3MB');return;}
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=new Image();
+    img.onload=function(){
+      // Compress: max 600px on longest side
+      var MAX=600,w=img.width,h=img.height;
+      if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
+      var canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      window._itemImgDataUrl=canvas.toDataURL('image/jpeg',0.82);
+      var prev=document.getElementById('item_img_prev');
+      if(prev){prev.outerHTML='<img id="item_img_prev" src="'+window._itemImgDataUrl+'" style="max-height:100px;border-radius:8px;object-fit:contain">';}
+      var nameEl=document.getElementById('item_img_name');
+      if(nameEl)nameEl.textContent='✓ '+file.name+' ready';
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 function setEmpActive(id,active){const e=(State.db.employees||[]).find(x=>x.id===id);if(e){e.active=active;persist();}}
 function delEmployee(id){confirmDel('Delete this employee?',()=>{State.db.employees=(State.db.employees||[]).filter(e=>e.id!==id);persist();viewEmployees();toast('Employee removed');});}
 
@@ -3536,7 +3581,7 @@ function closeModal(){document.getElementById('scrim').classList.remove('open');
 document.getElementById('scrim').addEventListener('click',e=>{if(e.target.id==='scrim')closeModal();});
 function confirmDel(msg,fn){openModal('Confirm',`<p>${msg}</p>`,[{label:'Cancel',cls:'ghost',fn:closeModal},{label:'Delete',cls:'',fn:()=>{closeModal();fn();}}],'sm');
   document.querySelector('#modal [data-act="1"]').style.background='var(--danger)';document.querySelector('#modal [data-act="1"]').style.color='#fff';}
-let toastT;function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2600);}
+var toastT;function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2600);}
 
 setAuthMode('register');
 renderIcons();
@@ -3583,7 +3628,7 @@ function renderCustomerOrders(orders) {
       return '<button class="'+(_ordersFilter===s?'active':'')+'" onclick="_ordersFilter=\''+s+'\';renderCustomerOrders(window._lastOrders)">'+label+cnt+'</button>';
     }).join('')+'</div>';
 
-  window._lastOrders = orders;
+  var _allOrders = orders; _allOrders = orders; window._lastOrders = orders; _allOrders = orders;
   var s = State.db.settings;
   var baseUrl = location.href.split('?')[0].split('/').slice(0,-1).join('/')+'/';
 

@@ -208,7 +208,7 @@ input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink);outlin
     <h2>Order placed!</h2>
     <p class="muted" style="margin-top:6px">Your order has been received. We'll be in touch soon.</p>
     <div class="confirm-num" id="confirmNum">#ORDER</div>
-    <p style="font-size:13.5px;color:var(--ink-soft)">Save your order number to track your order.</p>
+    <p style="font-size:13.5px;color:var(--ink-soft)">Your order number is saved — use it to track delivery.</p>
     <button class="track-btn" onclick="trackJustPlaced()">Track my order</button>
     <br><br>
     <button class="back-btn" onclick="startFresh()" style="font-size:14px;padding:10px 20px">Order more</button>
@@ -223,7 +223,7 @@ input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink);outlin
   </div>
   <div class="track-wrap">
     <div class="track-search">
-      <input id="trackInput" placeholder="Enter order number (e.g. ORD-0001)" style="flex:1;padding:11px 13px;border:1.5px solid var(--line);border-radius:11px;font-size:15px">
+      <input id="trackInput" placeholder="Enter order number (e.g. ORD-0001)" onkeydown="if(event.key==='Enter')doTrack()" style="flex:1;padding:11px 13px;border:1.5px solid var(--line);border-radius:11px;font-size:15px">
       <button onclick="doTrack()">Track</button>
     </div>
     <div id="trackResult"></div>
@@ -255,6 +255,9 @@ var payMethod = 'cod';
 var slipDataUrl = null;
 var lastOrderId = null;
 var lastOrderNum = null;
+// Restore last order from localStorage in case of refresh
+try { var _savedOrder = JSON.parse(localStorage.getItem('qm_last_order')||'null'); if(_savedOrder){ lastOrderId=_savedOrder.id; lastOrderNum=_savedOrder.num; } } catch(e){}
+
 var TOKEN = new URLSearchParams(location.search).get('b') || '';
 var TRACKING = new URLSearchParams(location.search).get('track') || '';
 
@@ -283,6 +286,9 @@ function fmtDate(d){if(!d)return'';try{return new Date(d).toLocaleDateString();}
     document.getElementById('splash').style.display = 'none';
     document.getElementById('header').style.display = 'flex';
     if (TRACKING) { showTrack(); document.getElementById('trackInput').value=TRACKING; doTrack(); }
+    // Restore last order view if returning from track URL
+    if(TRACKING && lastOrderNum===TRACKING){ show('confirmPage'); document.getElementById('confirmNum').textContent=lastOrderNum; }
+    else if(TRACKING){ showTrack(); document.getElementById('trackInput').value=TRACKING; doTrack(); }
     else showBrowse();
   } catch(e) { showErr('Could not connect: ' + e.message); }
 })();
@@ -312,6 +318,7 @@ function renderProducts(q){
     var oos = i.trackStock!==false && (i.stockQty||0)<=0;
     var availQty = i.trackStock!==false ? Math.max(0,(i.stockQty||0)) : 99;
     html += '<div class="prod-card'+(oos?' oos-card':'')+'">'+
+      (i.image?'<img src="'+i.image+'" style="width:100%;height:120px;object-fit:cover;border-radius:11px 11px 0 0">':'')+
       '<div class="pc-body">'+
         (oos?'<span class="oos-label">Out of stock</span>':'')+
         '<div class="pc-name">'+esc(i.name)+'</div>'+
@@ -449,6 +456,9 @@ async function placeOrder(){
     await db.collection('businesses').doc(ctx.businessUid)
       .collection('customerOrders').doc(orderId).set(order);
     lastOrderId=orderId; lastOrderNum=num;
+    try { localStorage.setItem('qm_last_order', JSON.stringify({id:orderId,num:num,biz:ctx.businessUid})); } catch(e){}
+    // Also update URL so refresh brings you back to confirmation
+    history.replaceState(null,'',location.pathname+'?b='+TOKEN+'&track='+num);
     document.getElementById('confirmNum').textContent=num;
     hide('cartPage'); show('confirmPage');
     cart=[]; slipDataUrl=null; updateBar();
@@ -463,23 +473,38 @@ function startFresh(){ hide('confirmPage'); showBrowse(); }
 
 // ---------- Tracking ----------
 async function doTrack(){
-  var q=document.getElementById('trackInput').value.trim();
+  var q=(document.getElementById('trackInput').value||'').trim();
   if(!q){alert('Enter your order number.');return;}
   var res=document.getElementById('trackResult');
   res.innerHTML='<div class="muted" style="text-align:center;padding:20px">Searching…</div>';
   try{
-    // Search by number or ID
+    var found=null;
+    // Strategy 1: match by number field (case-insensitive)
+    var numQ=q.toUpperCase();
+    if(!numQ.startsWith('ORD-'))numQ='ORD-'+numQ.replace(/^[^0-9]*/,'');
     var snap=await db.collection('businesses').doc(ctx.businessUid)
-      .collection('customerOrders').where('number','==',q.toUpperCase()).limit(1).get();
-    if(snap.empty){
-      // Try by orderId (full id)
+      .collection('customerOrders').where('number','==',numQ).limit(1).get();
+    if(!snap.empty){ found=snap.docs[0].data(); }
+    // Strategy 2: try original input as number
+    if(!found && q!==numQ){
+      var snap2=await db.collection('businesses').doc(ctx.businessUid)
+        .collection('customerOrders').where('number','==',q).limit(1).get();
+      if(!snap2.empty) found=snap2.docs[0].data();
+    }
+    // Strategy 3: try as document ID
+    if(!found){
       var byId=await db.collection('businesses').doc(ctx.businessUid)
         .collection('customerOrders').doc(q).get();
-      if(!byId.exists){res.innerHTML='<div class="card" style="padding:18px;text-align:center;color:var(--ink-soft)">No order found for <b>'+esc(q)+'</b>.<br>Check the order number and try again.</div>';return;}
-      renderTrackResult(byId.data());
-    } else {
-      renderTrackResult(snap.docs[0].data());
+      if(byId.exists) found=byId.data();
     }
+    if(!found){
+      res.innerHTML='<div class="card" style="padding:20px;text-align:center;color:var(--ink-soft)">'+
+        '<div style="font-size:28px;margin-bottom:10px">🔍</div>'+
+        '<b>No order found for "'+esc(q)+'"</b><br>'+
+        '<span style="font-size:13px">Try your full order number, e.g. <code>ORD-4521</code></span></div>';
+      return;
+    }
+    renderTrackResult(found);
   }catch(e){ res.innerHTML='<div style="color:var(--danger);padding:16px">Error: '+esc(e.message)+'</div>'; }
 }
 
