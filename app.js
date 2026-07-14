@@ -3595,6 +3595,59 @@ renderIcons();
    ============================================================ */
 var _ordersFilter = 'all';
 
+
+function confirmOrder(orderId) {
+  _fdb.collection('businesses').doc(State.user.uid)
+    .collection('customerOrders').doc(orderId).get()
+    .then(function(doc) {
+      if (!doc.exists) { toast('Order not found'); return; }
+      var o = doc.data();
+      var s = State.db.settings;
+      var itemRows = (o.lineItems||[]).map(function(li){
+        return '<tr><td>'+esc(li.name)+'</td>'+
+          '<td style="text-align:center">'+li.qty+'</td>'+
+          '<td style="text-align:right;font-family:monospace">'+money(li.unitPrice)+'</td>'+
+          '<td style="text-align:right;font-family:monospace;font-weight:600">'+money(li.amount)+'</td></tr>';
+      }).join('');
+      openModal('Confirm Order #'+(o.number||o.id.slice(-6)),
+        '<div style="background:var(--amber-soft);border:1.5px solid var(--amber);border-radius:11px;padding:12px 14px;margin-bottom:14px;font-size:13.5px">'+
+          '<b>Review this order before confirming.</b> Once confirmed, the customer will be prompted to pay.'+
+        '</div>'+
+        '<div class="fgrid">'+
+          '<div class="field"><label>Customer</label>'+
+            '<div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:13.5px">'+
+              '<b>'+esc(o.customer&&o.customer.name)+'</b><br>'+
+              esc(o.customer&&o.customer.phone||'')+'<br>'+
+              esc(o.customer&&o.customer.email||'')+'<br>'+
+              '<span class="muted">'+esc(o.customer&&o.customer.address||'')+'</span>'+
+            '</div></div>'+
+          '<div class="field"><label>Notes from customer</label>'+
+            '<div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;min-height:48px;font-size:13.5px">'+
+              esc(o.notes||'—')+'</div></div>'+
+        '</div>'+
+        '<div class="tbl" style="margin:12px 0"><table>'+
+          '<thead><tr><th>Item</th><th>Qty</th><th class="right">Unit price</th><th class="right">Amount</th></tr></thead>'+
+          '<tbody>'+itemRows+'</tbody>'+
+          '<tfoot><tr><td colspan="3" style="text-align:right;font-weight:700;padding:8px 0">Total</td>'+
+            '<td style="text-align:right;font-weight:700;padding:8px 0;font-family:monospace">'+money(o.totals&&o.totals.total)+'</td></tr></tfoot>'+
+        '</table></div>'+
+        '<div class="field"><label>Message to customer (optional)</label>'+
+          '<input id="cf_note" placeholder="e.g. Your order is confirmed! Please proceed with payment."></div>',
+        [{label:'Cancel',cls:'ghost',fn:closeModal},
+         {label:'✓ Confirm & request payment',cls:'accent',fn:function(){
+           var note = document.getElementById('cf_note') ? document.getElementById('cf_note').value : '';
+           var entry = {status:'confirmed',date:todayISO(),
+             time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),
+             note:note||'Order confirmed. Please proceed with payment.'};
+           _fdb.collection('businesses').doc(State.user.uid)
+             .collection('customerOrders').doc(orderId)
+             .update({status:'confirmed', timeline:firebase.firestore.FieldValue.arrayUnion(entry)})
+             .then(function(){ closeModal(); toast('Order confirmed — customer can now pay'); viewCustomerOrders(); })
+             .catch(function(e){ toast('Error: '+e.message); });
+         }}],'lg');
+    });
+}
+
 function viewCustomerOrders() {
   var c = document.getElementById('content');
   c.innerHTML = '<div class="card pad muted" style="text-align:center">Loading customer orders…</div>';
@@ -3614,18 +3667,34 @@ function viewCustomerOrders() {
 
 function renderCustomerOrders(orders) {
   var c = document.getElementById('content');
-  var statuses = ['all','pending','confirmed','processing','shipped','delivered','cancelled'];
-  var statusColors = {pending:'var(--amber)',confirmed:'#1d4ed8',processing:'#7c3aed',
-    shipped:'var(--accent)',delivered:'var(--accent-ink)',cancelled:'var(--danger)'};
+  var statuses = ['all','pending_confirmation','confirmed','payment_submitted','processing','shipped','delivered','cancelled'];
+  var statusColors = {
+    pending_confirmation:'#d97706',
+    confirmed:'#1d4ed8',
+    payment_submitted:'#7c3aed',
+    processing:'#0891b2',
+    shipped:'var(--accent)',
+    delivered:'var(--accent-ink)',
+    cancelled:'var(--danger)'
+  };
+  var statusLabels = {
+    pending_confirmation:'Awaiting Confirmation',
+    confirmed:'Payment Requested',
+    payment_submitted:'Payment Submitted',
+    processing:'Processing',
+    shipped:'Shipped',
+    delivered:'Delivered',
+    cancelled:'Cancelled'
+  };
   var filtered = _ordersFilter === 'all' ? orders : orders.filter(function(o){return o.status===_ordersFilter;});
   var counts = {};
   orders.forEach(function(o){counts[o.status]=(counts[o.status]||0)+1;});
 
   var tabsHtml = '<div class="tabs" style="margin-bottom:14px">'+
     statuses.map(function(s){
-      var label = s.charAt(0).toUpperCase()+s.slice(1);
+      var label = (statusLabels&&statusLabels[s]) || s.charAt(0).toUpperCase()+s.slice(1).replace(/_/g,' ');
       var cnt = s!=='all'&&counts[s]?' ('+counts[s]+')':'';
-      return '<button class="'+(_ordersFilter===s?'active':'')+'" onclick="_ordersFilter=\''+s+'\';renderCustomerOrders(window._lastOrders)">'+label+cnt+'</button>';
+      return '<button class="'+(_ordersFilter===s?'active':'')+'" onclick="_ordersFilter=\''+s+'\';renderCustomerOrders(_allOrders)">'+label+cnt+'</button>';
     }).join('')+'</div>';
 
   var _allOrders = orders; _allOrders = orders; window._lastOrders = orders; _allOrders = orders;
@@ -3648,22 +3717,27 @@ function renderCustomerOrders(orders) {
   var rows = filtered.map(function(o) {
     var col = statusColors[o.status]||'var(--ink-soft)';
     var hasSlip = o.payment&&o.payment.slipDataUrl;
+    var statusLabel = (statusLabels&&statusLabels[o.status]) || o.status;
+    var isPending = o.status === 'pending_confirmation';
+    var allStatuses = ['pending_confirmation','confirmed','payment_submitted','processing','shipped','delivered','cancelled'];
     return '<tr>'+
       '<td style="font-weight:600"><span class="mono">#'+esc(o.number||o.id.slice(-6).toUpperCase())+'</span></td>'+
       '<td>'+fmtDate(o.date)+'</td>'+
       '<td><b>'+esc(o.customer&&o.customer.name||'—')+'</b>'+
         '<div class="muted" style="font-size:12px">'+esc(o.customer&&o.customer.phone||'')+'</div></td>'+
       '<td>'+money(o.totals&&o.totals.total||0)+'</td>'+
-      '<td><span class="pill" style="background:'+col+'20;color:'+col+';font-weight:700">'+esc(o.status)+'</span></td>'+
-      '<td><div style="font-size:12.5px">'+esc((o.payment&&o.payment.method)||'—')+
-        (hasSlip?'&nbsp;<a class="linkish" onclick="viewOrderSlip(\''+o.id+'\')">slip ↗</a>':'')+'</div></td>'+
+      '<td><span class="pill" style="background:'+col+'20;color:'+col+';font-weight:700">'+esc(statusLabel)+'</span></td>'+
+      '<td><div style="font-size:12.5px">'+
+        (o.payment&&o.payment.method?esc(o.payment.method):'—')+
+        (hasSlip?'&nbsp;<a class="linkish" onclick="viewOrderSlip(\''+o.id+'\')">slip ↗</a>':'')+
+      '</div></td>'+
       '<td><div class="rowacts">'+
         '<button class="btn ghost tiny" onclick="openOrderDetail(\''+o.id+'\')">View</button>'+
-        '<select style="font-size:12px;border:1px solid var(--line);border-radius:7px;padding:4px 8px" onchange="updateOrderStatus(\''+o.id+'\',this.value)">'+
-          ['pending','confirmed','processing','shipped','delivered','cancelled'].map(function(s){
-            return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+s.charAt(0).toUpperCase()+s.slice(1)+'</option>';
+        (isPending?'<button class="btn accent tiny" onclick="confirmOrder(\''+o.id+'\')">✓ Confirm</button>':'<select style="font-size:12px;border:1px solid var(--line);border-radius:7px;padding:4px 8px" onchange="updateOrderStatus(\''+o.id+'\',this.value)">'+
+          allStatuses.map(function(s){
+            return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+(statusLabels[s]||s)+'</option>';
           }).join('')+
-        '</select>'+
+        '</select>')+
       '</div></td>'+
     '</tr>';
   }).join('');
@@ -3702,8 +3776,8 @@ function openOrderDetail(orderId) {
             esc(o.customer&&o.customer.email||'')+'<br>'+esc(o.customer&&o.customer.address||'')+'</div></div>'+
           '<div class="field"><label>Status</label>'+
             '<select id="od_status" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px">'+
-              ['pending','confirmed','processing','shipped','delivered','cancelled'].map(function(st){
-                return '<option value="'+st+'"'+(o.status===st?' selected':'')+'>'+st.charAt(0).toUpperCase()+st.slice(1)+'</option>';
+              ['pending_confirmation','confirmed','payment_submitted','processing','shipped','delivered','cancelled'].map(function(st){
+                return '<option value="'+st+'"'+(o.status===st?' selected':'')+'>'+(statusLabels&&statusLabels[st]?statusLabels[st]:st.charAt(0).toUpperCase()+st.slice(1))+'</option>';
               }).join('')+
             '</select></div>'+
           '<div class="field"><label>Update note</label><input id="od_note" placeholder="Optional message for customer"></div>'+
@@ -3729,7 +3803,12 @@ function updateOrderStatus(orderId, status, note) {
   _fdb.collection('businesses').doc(State.user.uid)
     .collection('customerOrders').doc(orderId)
     .update({ status:status, timeline: firebase.firestore.FieldValue.arrayUnion(entry) })
-    .then(function(){ toast('Order status updated to '+status); viewCustomerOrders(); })
+    .then(function(){
+      var labels={pending_confirmation:'Awaiting Confirmation',confirmed:'Payment Requested',
+        payment_submitted:'Payment Submitted',processing:'Processing',shipped:'Shipped',delivered:'Delivered',cancelled:'Cancelled'};
+      toast('Status updated: '+(labels[status]||status));
+      viewCustomerOrders();
+    })
     .catch(function(e){ toast('Error: '+e.message); });
 }
 
