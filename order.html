@@ -5,7 +5,72 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Order Portal</title>
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@500;600&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js">
+// ── Customer profile (localStorage) ─────────────────────────────────────
+var PROFILE_KEY = 'qm_profile';
+
+function loadProfile() {
+  try {
+    var p = JSON.parse(localStorage.getItem(PROFILE_KEY)||'null');
+    if (!p) return;
+    var n=document.getElementById('c_name'),ph=document.getElementById('c_phone'),
+        em=document.getElementById('c_email'),ad=document.getElementById('c_addr');
+    if(n&&p.name)  n.value  = p.name;
+    if(ph&&p.phone)ph.value = p.phone;
+    if(em&&p.email)em.value = p.email;
+    if(ad&&p.addr) ad.value = p.addr;
+    var g=document.getElementById('profile_greeting');
+    if(g&&p.name) g.textContent='Welcome back, '+p.name+'!';
+  } catch(e){}
+}
+
+function saveProfile() {
+  try {
+    var saveCb=document.getElementById('save_profile');
+    if(!saveCb||!saveCb.checked) return;
+    var p={
+      name:(document.getElementById('c_name')||{}).value||'',
+      phone:(document.getElementById('c_phone')||{}).value||'',
+      email:(document.getElementById('c_email')||{}).value||'',
+      addr:(document.getElementById('c_addr')||{}).value||''
+    };
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+    // Also store order number in history
+    addToMyOrders(lastOrderNum);
+  } catch(e){}
+}
+
+// My orders history in localStorage
+var MY_ORDERS_KEY = 'qm_my_orders';
+function addToMyOrders(num) {
+  if (!num) return;
+  try {
+    var list = JSON.parse(localStorage.getItem(MY_ORDERS_KEY)||'[]');
+    if (!list.includes(num)) list.unshift(num);
+    if (list.length > 20) list = list.slice(0,20);
+    localStorage.setItem(MY_ORDERS_KEY, JSON.stringify(list));
+  } catch(e){}
+}
+
+function showMyOrders() {
+  var sec=document.getElementById('myOrdersSection');
+  var lst=document.getElementById('myOrdersList');
+  if(!sec||!lst) return;
+  try {
+    var orders=JSON.parse(localStorage.getItem(MY_ORDERS_KEY)||'[]');
+    if(!orders.length){sec.style.display='none';return;}
+    sec.style.display='block';
+    lst.innerHTML=orders.map(function(num){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;' +
+        'padding:10px 14px;background:var(--card);border:1.5px solid var(--line);border-radius:11px;margin-bottom:8px">' +
+        '<span style="font-weight:600;font-family:monospace">#'+esc(num)+'</span>' +
+        '<button onclick="document.getElementById('trackInput').value=''+num+'';doTrack()" ' +
+          'style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer">Track</button>' +
+      '</div>';
+    }).join('');
+  } catch(e){ sec.style.display='none'; }
+}
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
 :root{--accent:#0f6d5a;--accent-soft:#e3f0ea;--accent-ink:#0b4a3c;--ink:#1b1d24;--ink-soft:#5b5d68;
@@ -136,12 +201,17 @@ input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink);outlin
   <div id="cartItems"></div>
   <div class="cart-total-bar" id="cartTotals"></div>
   <div class="chk-section">
-    <h3>Your details</h3>
+    <h3>Your details
+      <span id="profile_greeting" style="font-size:12px;font-weight:400;color:var(--accent-ink);margin-left:8px"></span>
+    </h3>
     <div class="field"><label>Full name *</label><input id="c_name" placeholder="Your name"></div>
     <div class="field"><label>Phone number *</label><input id="c_phone" type="tel" placeholder="+960 7xx xxxx"></div>
     <div class="field"><label>Email</label><input id="c_email" type="email" placeholder="your@email.com"></div>
     <div class="field"><label>Delivery address *</label><textarea id="c_addr" placeholder="Street, Island, Atoll"></textarea></div>
     <div class="field"><label>Order notes (optional)</label><textarea id="c_notes" placeholder="Any special instructions…" style="min-height:60px"></textarea></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:6px">
+      <input type="checkbox" id="save_profile" checked style="width:auto"> Save my details for next time
+    </label>
   </div>
   <div style="padding:16px">
     <div style="background:var(--amber-soft);border:1.5px solid var(--amber);border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:13.5px">
@@ -178,6 +248,10 @@ input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink);outlin
       <button onclick="doTrack()">Track</button>
     </div>
     <div id="trackResult"></div>
+    <div id="myOrdersSection" style="display:none;margin-top:16px">
+      <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin-bottom:10px">Your past orders</div>
+      <div id="myOrdersList"></div>
+    </div>
   </div>
 </div>
 
@@ -250,8 +324,8 @@ function showErr(msg){
 
 // Pages
 function showBrowse(){ hide('cartPage');hide('confirmPage');hide('trackPage');show('browse');updateBar(); renderProducts(''); }
-function showCart(){   hide('browse');hide('confirmPage');hide('trackPage');show('cartPage'); renderCart(); }
-function showTrack(){  hide('browse');hide('cartPage');hide('confirmPage');show('trackPage'); }
+function showCart(){   hide('browse');hide('confirmPage');hide('trackPage');show('cartPage'); renderCart(); loadProfile(); }
+function showTrack(){  hide('browse');hide('cartPage');hide('confirmPage');show('trackPage'); showMyOrders(); }
 function show(id){ document.getElementById(id).style.display='block'; }
 function hide(id){ document.getElementById(id).style.display='none'; }
 
@@ -376,6 +450,7 @@ async function placeOrder(){
     };
     await fdb.collection('businesses').doc(ctx.businessUid).collection('customerOrders').doc(orderId).set(order);
     lastOrderId = orderId; lastOrderNum = num;
+    saveProfile();
     try { localStorage.setItem('qm_last_order', JSON.stringify({id:orderId,num:num,biz:ctx.businessUid})); } catch(e){}
     history.replaceState(null,'',location.pathname+'?b='+TOKEN+'&track='+num);
     document.getElementById('confirmNum').textContent = num;

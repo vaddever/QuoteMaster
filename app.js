@@ -3626,232 +3626,263 @@ renderIcons();
    CUSTOMER ORDERS MODULE
    Business-side management of orders from order.html portal
    ============================================================ */
-var _ordersFilter = 'all';
+/* ============================================================
+   CUSTOMER ORDERS MODULE — business-side management
+   Re-written to fix: tab variable scoping, view button,
+   and to use _customerOrders cache properly
+   ============================================================ */
+var _ordersFilter  = 'all';
+var _customerOrders = [];
+var _STATUS_LABELS = {
+  all:'All',
+  pending_confirmation:'Awaiting Confirmation',
+  confirmed:'Payment Requested',
+  payment_submitted:'Payment Submitted',
+  processing:'Processing',
+  shipped:'Shipped',
+  delivered:'Delivered',
+  cancelled:'Cancelled'
+};
+var _STATUS_COLORS = {
+  pending_confirmation:'#d97706', confirmed:'#1d4ed8',
+  payment_submitted:'#7c3aed',   processing:'#0891b2',
+  shipped:'var(--accent)',        delivered:'var(--accent-ink)',
+  cancelled:'var(--danger)'
+};
 
-
+/* --- confirmOrder modal (called from row button) ---------------------- */
 function confirmOrder(orderId) {
-  _fdb.collection('businesses').doc(State.user.uid)
-    .collection('customerOrders').doc(orderId).get()
-    .then(function(doc) {
-      if (!doc.exists) { toast('Order not found'); return; }
-      var o = doc.data();
-      var s = State.db.settings;
-      var itemRows = (o.lineItems||[]).map(function(li){
-        return '<tr><td>'+esc(li.name)+'</td>'+
-          '<td style="text-align:center">'+li.qty+'</td>'+
-          '<td style="text-align:right;font-family:monospace">'+money(li.unitPrice)+'</td>'+
-          '<td style="text-align:right;font-family:monospace;font-weight:600">'+money(li.amount)+'</td></tr>';
-      }).join('');
-      openModal('Confirm Order #'+(o.number||o.id.slice(-6)),
-        '<div style="background:var(--amber-soft);border:1.5px solid var(--amber);border-radius:11px;padding:12px 14px;margin-bottom:14px;font-size:13.5px">'+
-          '<b>Review this order before confirming.</b> Once confirmed, the customer will be prompted to pay.'+
-        '</div>'+
-        '<div class="fgrid">'+
-          '<div class="field"><label>Customer</label>'+
-            '<div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:13.5px">'+
-              '<b>'+esc(o.customer&&o.customer.name)+'</b><br>'+
-              esc(o.customer&&o.customer.phone||'')+'<br>'+
-              esc(o.customer&&o.customer.email||'')+'<br>'+
-              '<span class="muted">'+esc(o.customer&&o.customer.address||'')+'</span>'+
-            '</div></div>'+
-          '<div class="field"><label>Notes from customer</label>'+
-            '<div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;min-height:48px;font-size:13.5px">'+
-              esc(o.notes||'—')+'</div></div>'+
-        '</div>'+
-        '<div class="tbl" style="margin:12px 0"><table>'+
-          '<thead><tr><th>Item</th><th>Qty</th><th class="right">Unit price</th><th class="right">Amount</th></tr></thead>'+
-          '<tbody>'+itemRows+'</tbody>'+
-          '<tfoot><tr><td colspan="3" style="text-align:right;font-weight:700;padding:8px 0">Total</td>'+
-            '<td style="text-align:right;font-weight:700;padding:8px 0;font-family:monospace">'+money(o.totals&&o.totals.total)+'</td></tr></tfoot>'+
-        '</table></div>'+
-        '<div class="field"><label>Message to customer (optional)</label>'+
-          '<input id="cf_note" placeholder="e.g. Your order is confirmed! Please proceed with payment."></div>',
-        [{label:'Cancel',cls:'ghost',fn:closeModal},
-         {label:'✓ Confirm & request payment',cls:'accent',fn:function(){
-           var note = document.getElementById('cf_note') ? document.getElementById('cf_note').value : '';
-           var entry = {status:'confirmed',date:todayISO(),
-             time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),
-             note:note||'Order confirmed. Please proceed with payment.'};
-           _fdb.collection('businesses').doc(State.user.uid)
-             .collection('customerOrders').doc(orderId)
-             .update({status:'confirmed', timeline:firebase.firestore.FieldValue.arrayUnion(entry)})
-             .then(function(){ closeModal(); toast('Order confirmed — customer can now pay'); viewCustomerOrders(); })
-             .catch(function(e){ toast('Error: '+e.message); });
-         }}],'lg');
-    });
+  var o = _customerOrders.find(function(x){ return x.id===orderId; });
+  if (!o) { toast('Order not found in cache'); return; }
+  var iRows = (o.lineItems||[]).map(function(li){
+    return '<tr><td>'+esc(li.name)+'</td><td style="text-align:center">'+li.qty+'</td>'+
+      '<td style="text-align:right;font-family:monospace">'+money(li.unitPrice)+'</td>'+
+      '<td style="text-align:right;font-family:monospace;font-weight:600">'+money(li.amount)+'</td></tr>';
+  }).join('');
+  openModal('Confirm Order #'+esc(o.number||o.id.slice(-6)),
+    '<div style="background:var(--amber-soft);border:1.5px solid var(--amber);border-radius:11px;' +
+      'padding:12px 14px;margin-bottom:14px;font-size:13.5px">' +
+      '<b>Review before confirming.</b> Once confirmed, the customer will be asked to pay.</div>' +
+    '<div class="fgrid">' +
+      '<div class="field"><label>Customer</label><div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:13.5px">' +
+        '<b>'+esc(o.customer&&o.customer.name)+'</b><br>' +
+        esc(o.customer&&o.customer.phone||'')+'<br>' +
+        esc(o.customer&&o.customer.email||'')+'<br>' +
+        '<span class="muted">'+esc(o.customer&&o.customer.address||'')+'</span></div></div>' +
+      '<div class="field"><label>Customer notes</label>' +
+        '<div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;min-height:48px;font-size:13.5px">'+esc(o.notes||'—')+'</div></div>' +
+    '</div>' +
+    '<div class="tbl" style="margin:12px 0"><table>' +
+      '<thead><tr><th>Item</th><th>Qty</th><th class="right">Unit price</th><th class="right">Amount</th></tr></thead>' +
+      '<tbody>'+iRows+'</tbody>' +
+      '<tfoot><tr>' +
+        '<td colspan="3" style="text-align:right;font-weight:700;padding:8px 0">Total</td>' +
+        '<td style="text-align:right;font-weight:700;padding:8px 0;font-family:monospace">'+money(o.totals&&o.totals.total)+'</td>' +
+      '</tr></tfoot></table></div>' +
+    '<div class="field"><label>Message to customer (optional)</label>' +
+      '<input id="cf_note" placeholder="Your order is confirmed! Please proceed with payment."></div>',
+    [{label:'Cancel',cls:'ghost',fn:closeModal},
+     {label:'Confirm & request payment',cls:'accent',fn:function(){
+       var note=(document.getElementById('cf_note')||{}).value||'Order confirmed. Please proceed with payment.';
+       var entry={status:'confirmed',date:todayISO(),
+         time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),note:note};
+       _fdb.collection('businesses').doc(State.user.uid).collection('customerOrders').doc(orderId)
+         .update({status:'confirmed',timeline:firebase.firestore.FieldValue.arrayUnion(entry)})
+         .then(function(){ closeModal(); toast('Confirmed — customer can now pay'); viewCustomerOrders(); })
+         .catch(function(e){ toast('Error: '+e.message); });
+     }}],'lg');
 }
 
+/* --- viewCustomerOrders: fetch then render ---------------------------- */
 function viewCustomerOrders() {
-  var c = document.getElementById('content');
-  c.innerHTML = '<div class="card pad muted" style="text-align:center">Loading customer orders…</div>';
+  var c=document.getElementById('content');
+  c.innerHTML='<div class="card pad muted" style="text-align:center">Loading orders…</div>';
   _fdb.collection('businesses').doc(State.user.uid)
-    .collection('customerOrders')
-    .orderBy('date', 'desc').limit(100).get()
-    .then(function(snap) {
-      var orders = snap.docs.map(function(d){ return d.data(); });
-      renderCustomerOrders(orders);
+    .collection('customerOrders').orderBy('date','desc').limit(200).get()
+    .then(function(snap){
+      _customerOrders=snap.docs.map(function(d){ return d.data(); });
+      _renderOrders();
     })
-    .catch(function(e) {
-      c.innerHTML = '<div class="card pad" style="background:var(--amber-soft);border-color:var(--amber)">'+
-        '<b>Could not load orders.</b> Make sure Firestore rules allow subcollection reads.<br>'+
-        esc(e.message)+'</div>';
+    .catch(function(e){
+      c.innerHTML='<div class="card pad" style="background:var(--amber-soft);border-color:var(--amber)">' +
+        '<b>Could not load orders.</b><br>'+esc(e.message)+
+        '<br><small>Make sure Firestore rules are published and include customerOrders subcollection.</small></div>';
     });
 }
 
-function renderCustomerOrders(orders) {
-  var c = document.getElementById('content');
-  var statuses = ['all','pending_confirmation','confirmed','payment_submitted','processing','shipped','delivered','cancelled'];
-  var statusColors = {
-    pending_confirmation:'#d97706',
-    confirmed:'#1d4ed8',
-    payment_submitted:'#7c3aed',
-    processing:'#0891b2',
-    shipped:'var(--accent)',
-    delivered:'var(--accent-ink)',
-    cancelled:'var(--danger)'
-  };
-  var statusLabels = {
-    pending_confirmation:'Awaiting Confirmation',
-    confirmed:'Payment Requested',
-    payment_submitted:'Payment Submitted',
-    processing:'Processing',
-    shipped:'Shipped',
-    delivered:'Delivered',
-    cancelled:'Cancelled'
-  };
-  var filtered = _ordersFilter === 'all' ? orders : orders.filter(function(o){return o.status===_ordersFilter;});
-  var counts = {};
-  orders.forEach(function(o){counts[o.status]=(counts[o.status]||0)+1;});
+/* Tab click — no Firestore refetch, just re-filter and re-render */
+function filterOrders(status){ _ordersFilter=status; _renderOrders(); }
 
-  var tabsHtml = '<div class="tabs" style="margin-bottom:14px">'+
-    statuses.map(function(s){
-      var label = (statusLabels&&statusLabels[s]) || s.charAt(0).toUpperCase()+s.slice(1).replace(/_/g,' ');
-      var cnt = s!=='all'&&counts[s]?' ('+counts[s]+')':'';
-      return '<button class="'+(_ordersFilter===s?'active':'')+'" onclick="_ordersFilter=\''+s+'\';renderCustomerOrders(_allOrders)">'+label+cnt+'</button>';
-    }).join('')+'</div>';
+/* Render order list (tabs + table) */
+function _renderOrders() {
+  var c=document.getElementById('content'); if(!c)return;
+  var orders=_customerOrders;
+  var statusList=['all','pending_confirmation','confirmed','payment_submitted',
+                  'processing','shipped','delivered','cancelled'];
+  var counts={};
+  orders.forEach(function(o){ counts[o.status]=(counts[o.status]||0)+1; });
+  var filtered=_ordersFilter==='all'
+    ? orders
+    : orders.filter(function(o){ return o.status===_ordersFilter; });
 
-  var _allOrders = orders; _allOrders = orders; window._lastOrders = orders; _allOrders = orders;
-  var s = State.db.settings;
-  var baseUrl = location.href.split('?')[0].split('/').slice(0,-1).join('/')+'/';
+  /* tabs */
+  var tabs=statusList.map(function(s){
+    var lbl=_STATUS_LABELS[s]||s;
+    var cnt=s!=='all'&&counts[s]?' ('+counts[s]+')':'';
+    return '<button class="'+(_ordersFilter===s?'active':'')+
+      '" onclick="filterOrders(\''+s+'\')">'+lbl+cnt+'</button>';
+  }).join('');
+  var tabsHtml='<div class="tabs" style="margin-bottom:14px">'+tabs+'</div>';
 
-  var portalCard = '<div class="card pad" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;border-left:3px solid var(--accent)">'+
-    '<div><b>Customer Order Portal</b><div class="muted" style="font-size:12.5px">Share this link — customers can browse and place orders</div></div>'+
-    '<div class="row" style="gap:8px">'+
-    '<code style="font-size:12px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper)">'+(baseUrl+'order.html?b='+esc(s.orderToken||''))+'</code>'+
-    '<button class="btn ghost sm" onclick="navigator.clipboard?.writeText(\''+baseUrl+'order.html?b='+(s.orderToken||'')+'\').then(()=>toast(\'Order portal link copied!\'))">Copy</button>'+
-    '<button class="btn accent sm" onclick="window.open(\''+baseUrl+'order.html?b='+(s.orderToken||'')+'\',\'_blank\')">Open ↗</button>'+
+  /* portal link */
+  var baseUrl=location.href.split('?')[0].split('/').slice(0,-1).join('/')+'/';
+  var tok=(State.db&&State.db.settings&&State.db.settings.orderToken)||'';
+  var link=baseUrl+'order.html?b='+tok;
+  var portalCard=
+    '<div class="card pad" style="margin-bottom:14px;display:flex;justify-content:space-between;'+
+      'align-items:center;flex-wrap:wrap;gap:10px;border-left:3px solid var(--accent)">' +
+    '<div><b>Customer Order Portal</b>' +
+      '<div class="muted" style="font-size:12.5px">Share this link — customers can browse and place orders</div></div>' +
+    '<div class="row" style="gap:8px">' +
+      '<code style="font-size:11.5px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;' +
+        'background:var(--paper);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block">'+
+        esc(link)+'</code>' +
+      '<button class="btn ghost sm" onclick="navigator.clipboard&&navigator.clipboard.writeText(\''+link+'\')'+
+        '.then(function(){toast(\'Copied!\')})">Copy</button>' +
+      '<button class="btn accent sm" onclick="window.open(\''+link+'\',\'_blank\')">Open ↗</button>' +
     '</div></div>';
 
-  if (!filtered.length) {
-    c.innerHTML = tabsHtml + portalCard + emptyBox('No orders yet','Share your order portal link with customers.');
+  if(!filtered.length){
+    c.innerHTML=tabsHtml+portalCard+emptyBox('No orders in this category',
+      'Orders placed through your order portal will appear here.');
     return;
   }
 
-  var rows = filtered.map(function(o) {
-    var col = statusColors[o.status]||'var(--ink-soft)';
-    var hasSlip = o.payment&&o.payment.slipDataUrl;
-    var statusLabel = (statusLabels&&statusLabels[o.status]) || o.status;
-    var isPending = o.status === 'pending_confirmation';
-    var allStatuses = ['pending_confirmation','confirmed','payment_submitted','processing','shipped','delivered','cancelled'];
-    return '<tr>'+
-      '<td style="font-weight:600"><span class="mono">#'+esc(o.number||o.id.slice(-6).toUpperCase())+'</span></td>'+
-      '<td>'+fmtDate(o.date)+'</td>'+
-      '<td><b>'+esc(o.customer&&o.customer.name||'—')+'</b>'+
-        '<div class="muted" style="font-size:12px">'+esc(o.customer&&o.customer.phone||'')+'</div></td>'+
-      '<td>'+money(o.totals&&o.totals.total||0)+'</td>'+
-      '<td><span class="pill" style="background:'+col+'20;color:'+col+';font-weight:700">'+esc(statusLabel)+'</span></td>'+
-      '<td><div style="font-size:12.5px">'+
-        (o.payment&&o.payment.method?esc(o.payment.method):'—')+
-        (hasSlip?'&nbsp;<a class="linkish" onclick="viewOrderSlip(\''+o.id+'\')">slip ↗</a>':'')+
-      '</div></td>'+
-      '<td><div class="rowacts">'+
-        '<button class="btn ghost tiny" onclick="openOrderDetail(\''+o.id+'\')">View</button>'+
-        (isPending?'<button class="btn accent tiny" onclick="confirmOrder(\''+o.id+'\')">✓ Confirm</button>':'<select style="font-size:12px;border:1px solid var(--line);border-radius:7px;padding:4px 8px" onchange="updateOrderStatus(\''+o.id+'\',this.value)">'+
-          allStatuses.map(function(s){
-            return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+(statusLabels[s]||s)+'</option>';
-          }).join('')+
-        '</select>')+
-      '</div></td>'+
+  var allSt=['pending_confirmation','confirmed','payment_submitted','processing','shipped','delivered','cancelled'];
+  var rows=filtered.map(function(o){
+    var col=_STATUS_COLORS[o.status]||'var(--ink-soft)';
+    var lbl=_STATUS_LABELS[o.status]||o.status;
+    var isPend=o.status==='pending_confirmation';
+    var hasSlip=o.payment&&o.payment.slipDataUrl;
+    var ddOpts=allSt.map(function(s){
+      return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+(_STATUS_LABELS[s]||s)+'</option>';
+    }).join('');
+    return '<tr>' +
+      '<td style="font-weight:600"><span class="mono">#'+esc(o.number||o.id.slice(-6))+'</span></td>' +
+      '<td>'+fmtDate(o.date)+'</td>' +
+      '<td><b>'+esc((o.customer&&o.customer.name)||'—')+'</b>' +
+        '<div class="muted" style="font-size:12px">'+esc((o.customer&&o.customer.phone)||'')+'</div></td>' +
+      '<td>'+money((o.totals&&o.totals.total)||0)+'</td>' +
+      '<td><span class="pill" style="background:'+col+'20;color:'+col+';font-weight:700">'+esc(lbl)+'</span></td>' +
+      '<td><div style="font-size:12.5px">'+(o.payment&&o.payment.method?esc(o.payment.method):'—') +
+        (hasSlip?'&nbsp;<a class="linkish" onclick="viewOrderSlip(\''+o.id+'\')">slip</a>':'') +
+      '</div></td>' +
+      '<td><div class="rowacts">' +
+        '<button class="btn ghost tiny" onclick="openOrderDetail(\''+o.id+'\')">View</button>' +
+        (isPend
+          ? '<button class="btn accent tiny" onclick="confirmOrder(\''+o.id+'\')">&#10003; Confirm</button>'
+          : '<select style="font-size:12px;border:1px solid var(--line);border-radius:7px;padding:4px 8px"' +
+              ' onchange="updateOrderStatus(\''+o.id+'\',this.value)">'+ddOpts+'</select>') +
+      '</div></td>' +
     '</tr>';
   }).join('');
 
-  c.innerHTML = tabsHtml + portalCard +
-    '<div class="tbl"><table><thead><tr>'+
-    '<th>Order #</th><th>Date</th><th>Customer</th><th>Total</th><th>Status</th><th>Payment</th><th></th>'+
+  c.innerHTML=tabsHtml+portalCard+
+    '<div class="tbl"><table><thead><tr>' +
+      '<th>Order #</th><th>Date</th><th>Customer</th><th>Total</th>'+
+      '<th>Status</th><th>Payment</th><th></th>' +
     '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
+/* --- openOrderDetail: use cache first --------------------------------- */
 function openOrderDetail(orderId) {
-  _fdb.collection('businesses').doc(State.user.uid)
-    .collection('customerOrders').doc(orderId).get()
-    .then(function(doc) {
-      if (!doc.exists) { toast('Order not found'); return; }
-      var o = doc.data();
-      var s = State.db.settings;
-      var itemRows = (o.lineItems||[]).map(function(li){
-        return '<tr><td>'+esc(li.name)+'</td><td style="text-align:center">'+li.qty+'</td>'+
-          '<td style="text-align:right;font-family:monospace">'+money(li.unitPrice)+'</td>'+
-          '<td style="text-align:right;font-family:monospace;font-weight:600">'+money(li.amount)+'</td></tr>';
-      }).join('');
-      var timelineHtml = (o.timeline||[]).map(function(t){
-        return '<div style="display:flex;gap:10px;margin-bottom:8px;font-size:13px">'+
-          '<span style="background:var(--accent-soft);color:var(--accent-ink);padding:2px 10px;border-radius:20px;font-weight:600;white-space:nowrap">'+esc(t.status)+'</span>'+
-          '<span class="muted">'+fmtDate(t.date)+' '+esc(t.time||'')+'</span>'+
-          (t.note?'<span>'+esc(t.note)+'</span>':'')+'</div>';
-      }).join('');
-      var slipHtml = o.payment&&o.payment.slipDataUrl
-        ? '<div class="field"><label>Transfer slip</label><img src="'+o.payment.slipDataUrl+'" style="max-width:100%;border-radius:10px;border:1px solid var(--line)"></div>'
-        : '';
-      openModal('Order #'+(o.number||o.id.slice(-6).toUpperCase()),
-        '<div class="fgrid">' +
-          '<div class="field"><label>Customer</label><div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px">'+
-            esc(o.customer&&o.customer.name)+' · '+esc(o.customer&&o.customer.phone||'')+'<br>'+
-            esc(o.customer&&o.customer.email||'')+'<br>'+esc(o.customer&&o.customer.address||'')+'</div></div>'+
-          '<div class="field"><label>Status</label>'+
-            '<select id="od_status" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px">'+
-              ['pending_confirmation','confirmed','payment_submitted','processing','shipped','delivered','cancelled'].map(function(st){
-                return '<option value="'+st+'"'+(o.status===st?' selected':'')+'>'+(statusLabels&&statusLabels[st]?statusLabels[st]:st.charAt(0).toUpperCase()+st.slice(1))+'</option>';
-              }).join('')+
-            '</select></div>'+
-          '<div class="field"><label>Update note</label><input id="od_note" placeholder="Optional message for customer"></div>'+
-        '</div>'+
-        '<div class="tbl" style="margin-top:12px"><table>'+
-          '<thead><tr><th>Item</th><th>Qty</th><th class="right">Unit</th><th class="right">Amount</th></tr></thead>'+
-          '<tbody>'+itemRows+'</tbody>'+
-          '<tfoot><tr><td colspan="3" style="text-align:right;font-weight:700;padding:8px 0">Total</td>'+
-            '<td style="text-align:right;font-weight:700;padding:8px 0;font-family:monospace">'+money(o.totals&&o.totals.total)+' </td></tr></tfoot>'+
-        '</table></div>'+
-        slipHtml+
-        (timelineHtml?'<div style="margin-top:14px"><b style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)">History</b>'+timelineHtml+'</div>':''),
-        [{label:'Close',cls:'ghost',fn:closeModal},
-         {label:'Save status',cls:'accent',fn:function(){
-           updateOrderStatus(orderId, document.getElementById('od_status').value, document.getElementById('od_note').value);
-           closeModal();
-         }}],'lg');
-    });
+  var cached=_customerOrders.find(function(o){ return o.id===orderId; });
+  if(cached){ _showOrderModal(cached); return; }
+  _fdb.collection('businesses').doc(State.user.uid).collection('customerOrders').doc(orderId).get()
+    .then(function(doc){ if(doc.exists)_showOrderModal(doc.data()); else toast('Order not found'); })
+    .catch(function(e){ toast('Error: '+e.message); });
+}
+
+function _showOrderModal(o) {
+  var allSt=['pending_confirmation','confirmed','payment_submitted','processing','shipped','delivered','cancelled'];
+  var iRows=(o.lineItems||[]).map(function(li){
+    return '<tr><td>'+esc(li.name)+'</td>' +
+      '<td style="text-align:center">'+li.qty+' '+esc(li.unit||'pc')+'</td>' +
+      '<td style="text-align:right;font-family:monospace">'+money(li.unitPrice)+'</td>' +
+      '<td style="text-align:right;font-family:monospace;font-weight:600">'+money(li.amount)+'</td></tr>';
+  }).join('');
+  var hist=(o.timeline||[]).slice().reverse().map(function(t){
+    return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:13px">' +
+      '<span style="background:var(--accent-soft);color:var(--accent-ink);padding:2px 10px;' +
+        'border-radius:20px;font-weight:600;white-space:nowrap">'+esc(_STATUS_LABELS[t.status]||t.status)+'</span>' +
+      '<span class="muted">'+fmtDate(t.date)+' '+esc(t.time||'')+'</span>' +
+      (t.note?'<span>'+esc(t.note)+'</span>':'') +
+    '</div>';
+  }).join('');
+  var slip=o.payment&&o.payment.slipDataUrl
+    ? '<div class="field" style="margin-top:12px"><label>Transfer slip</label>' +
+      '<img src="'+o.payment.slipDataUrl+'" style="max-width:100%;border-radius:10px;border:1px solid var(--line)"></div>'
+    : '';
+  var ddOpts=allSt.map(function(s){
+    return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+(_STATUS_LABELS[s]||s)+'</option>';
+  }).join('');
+  var body=
+    '<div class="fgrid">' +
+      '<div class="field"><label>Customer</label>' +
+        '<div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:13.5px">' +
+          '<b>'+esc((o.customer&&o.customer.name)||'')+'</b><br>' +
+          esc((o.customer&&o.customer.phone)||'')+'<br>' +
+          esc((o.customer&&o.customer.email)||'')+'<br>' +
+          '<span class="muted">'+esc((o.customer&&o.customer.address)||'')+'</span>' +
+        '</div></div>' +
+      '<div class="field">' +
+        '<label>Update status</label>' +
+        '<select id="od_status" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px">'+ddOpts+'</select>' +
+        '<div class="field" style="margin-top:8px"><label>Message to customer</label>' +
+          '<input id="od_note" placeholder="Optional note"></div>' +
+      '</div>' +
+    '</div>' +
+    (o.notes?'<div class="card pad" style="margin-bottom:10px;font-size:13.5px"><b>Customer note:</b> '+esc(o.notes)+'</div>':'') +
+    '<div class="tbl" style="margin-top:4px"><table>' +
+      '<thead><tr><th>Item</th><th>Qty</th><th class="right">Unit</th><th class="right">Amount</th></tr></thead>' +
+      '<tbody>'+iRows+'</tbody>' +
+      '<tfoot><tr>' +
+        '<td colspan="3" style="text-align:right;font-weight:700;padding:8px 0">Total</td>' +
+        '<td style="text-align:right;font-weight:700;padding:8px 0;font-family:monospace">'+money(o.totals&&o.totals.total)+'</td>' +
+      '</tr></tfoot></table></div>' +
+    slip +
+    (hist?'<div style="margin-top:14px"><b style="font-size:12px;text-transform:uppercase;color:var(--ink-soft)">Status history</b>'+
+      '<div style="margin-top:8px">'+hist+'</div></div>':'');
+  openModal('Order #'+esc(o.number||o.id.slice(-6).toUpperCase()), body,
+    [{label:'Close',cls:'ghost',fn:closeModal},
+     {label:'Save status',cls:'accent',fn:function(){
+       var st=document.getElementById('od_status');
+       var nt=document.getElementById('od_note');
+       if(st){ updateOrderStatus(o.id, st.value, nt?nt.value:''); }
+       closeModal();
+     }}],'lg');
 }
 
 function updateOrderStatus(orderId, status, note) {
-  var entry = { status:status, date:todayISO(), time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}), note:note||'' };
-  _fdb.collection('businesses').doc(State.user.uid)
-    .collection('customerOrders').doc(orderId)
-    .update({ status:status, timeline: firebase.firestore.FieldValue.arrayUnion(entry) })
+  var entry={status:status, date:todayISO(),
+    time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}), note:note||''};
+  _fdb.collection('businesses').doc(State.user.uid).collection('customerOrders').doc(orderId)
+    .update({status:status, timeline:firebase.firestore.FieldValue.arrayUnion(entry)})
     .then(function(){
-      var labels={pending_confirmation:'Awaiting Confirmation',confirmed:'Payment Requested',
-        payment_submitted:'Payment Submitted',processing:'Processing',shipped:'Shipped',delivered:'Delivered',cancelled:'Cancelled'};
-      toast('Status updated: '+(labels[status]||status));
-      viewCustomerOrders();
+      toast('Status updated: '+(_STATUS_LABELS[status]||status));
+      // Update cache too
+      var idx=_customerOrders.findIndex(function(o){ return o.id===orderId; });
+      if(idx>=0){ _customerOrders[idx].status=status; _renderOrders(); }
+      else viewCustomerOrders();
     })
     .catch(function(e){ toast('Error: '+e.message); });
 }
 
 function viewOrderSlip(orderId) {
-  _fdb.collection('businesses').doc(State.user.uid)
-    .collection('customerOrders').doc(orderId).get()
-    .then(function(doc) {
-      if (!doc.exists) return;
-      var slip = doc.data().payment && doc.data().payment.slipDataUrl;
-      if (!slip) { toast('No slip attached'); return; }
-      var w = window.open(''); w.document.write('<img src="'+slip+'" style="max-width:100%;"> '); w.document.close();
-    });
+  var o=_customerOrders.find(function(x){ return x.id===orderId; });
+  var slip=o&&o.payment&&o.payment.slipDataUrl;
+  if(!slip){ toast('No slip attached'); return; }
+  var w=window.open('','_blank');
+  if(w){ w.document.write('<body style="margin:0;background:#000"><img src="'+slip+'" style="max-width:100%;display:block">'); w.document.close(); }
 }
+
