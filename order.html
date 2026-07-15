@@ -219,10 +219,17 @@ function fmtDate(d){ if(!d)return ''; try{return new Date(d).toLocaleDateString(
 (async function(){
   if (!TOKEN) { showErr('No business token in URL.\nPlease use the link provided by the business.'); return; }
   try {
-    var snap = await fdb.collection('businesses').where('settings.orderToken','==',TOKEN).limit(1).get();
-    if (snap.empty) { showErr('Invalid or expired link.\nPlease contact the business for a new link.'); return; }
-    var bizDoc = snap.docs[0];
-    ctx = { businessUid: bizDoc.id, settings: bizDoc.data().settings, items: bizDoc.data().items || [] };
+    // Reads from public portals collection — never exposes private business data
+    var portalDoc = await fdb.collection('portals').doc(TOKEN).get();
+    if (!portalDoc.exists) { showErr('Invalid or expired link.\nPlease contact the business for a new link.'); return; }
+    var pd = portalDoc.data();
+    ctx = {
+      businessUid: pd.businessUid,
+      settings: { businessName:pd.businessName, logo:pd.logo, currency:pd.currency,
+        currencySymbol:pd.currencySymbol, taxLabel:pd.taxLabel, taxRate:pd.taxRate,
+        bankDetails:pd.bankDetails },
+      items: pd.items || []
+    };
     var s = ctx.settings;
     var logo = document.getElementById('bizLogo');
     if (s.logo) { logo.innerHTML = '<img src="'+s.logo+'">'; logo.style.background='transparent'; }

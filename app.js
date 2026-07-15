@@ -70,9 +70,39 @@ function persist() {
   _saveT = setTimeout(async () => {
     const user = _auth.currentUser;
     if (!user || !State.db) return;
-    try { await _fdb.collection('businesses').doc(user.uid).set(State.db); }
-    catch(e) { console.error('Save error', e); }
+    try {
+      await _fdb.collection('businesses').doc(user.uid).set(State.db);
+      // Sync public portal data (safe to expose — no customer/invoice data)
+      syncPortal(user.uid);
+    } catch(e) { console.error('Save error', e); }
   }, 800);
+}
+
+// Sync order portal public data to portals/{orderToken}
+// Only exposes: business name, logo, currency, items, bank details
+function syncPortal(uid) {
+  const s = State.db && State.db.settings;
+  if (!s || !s.orderToken) return;
+  const portalData = {
+    businessUid: uid,
+    businessName: s.businessName || '',
+    logo: s.logo || '',
+    currency: s.currency || 'Rf',
+    currencySymbol: s.currencySymbol || 'Rf',
+    taxLabel: s.taxLabel || 'GST',
+    taxRate: s.taxRate || 6,
+    bankDetails: s.bankDetails || '',
+    updatedAt: new Date().toISOString(),
+    items: (State.db.items || [])
+      .filter(function(i){ return i.unitPrice > 0; })
+      .map(function(i){
+        return { id:i.id, name:i.name, desc:i.desc||'', image:i.image||null,
+          unit:i.unit||'pc', unitPrice:i.unitPrice, taxable:i.taxable!==false,
+          trackStock:i.trackStock!==false, stockQty:i.stockQty||0, reorderLevel:i.reorderLevel||0 };
+      })
+  };
+  _fdb.collection('portals').doc(s.orderToken).set(portalData)
+    .catch(function(e){ console.warn('Portal sync:', e.message); });
 }
 function starterDb(businessName, email) {
   return {
@@ -280,6 +310,9 @@ function launchApp(){
   if(State.db && !Array.isArray(State.db.stockMovements)) State.db.stockMovements=[];
   if(State.db && !Array.isArray(State.db.stockAudits))    State.db.stockAudits=[];
   if(State.db && !Array.isArray(State.db.zakatRecords))   State.db.zakatRecords=[];
+  // Sync public order portal on login
+  const _launchUid = _auth.currentUser && _auth.currentUser.uid;
+  if (_launchUid) setTimeout(function(){ syncPortal(_launchUid); }, 1200);
   if(State.db && !State.db.gstSettings) State.db.gstSettings={registered:false,gstNumber:'',sector:'general',filingFrequency:'quarterly',filedReturns:[]};
   if(State.db){const s=State.db.settings;if(!s.zakatNisabStd)s.zakatNisabStd='silver';if(!s.zakatSilverPrice)s.zakatSilverPrice=32.82;if(!s.zakatGoldPrice)s.zakatGoldPrice=440;}
   const DEFAULT_UOMS=['pc','box','hr','kg','g','L','mL','m','cm','ft','dozen','ream','pair','set','service','month','day','km'];
