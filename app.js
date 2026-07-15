@@ -3633,22 +3633,16 @@ renderIcons();
    ============================================================ */
 var _ordersFilter  = 'all';
 var _customerOrders = [];
-var _STATUS_LABELS = {
-  all:'All',
-  pending_confirmation:'Awaiting Confirmation',
-  confirmed:'Payment Requested',
-  payment_submitted:'Payment Submitted',
-  processing:'Processing',
-  shipped:'Shipped',
-  delivered:'Delivered',
-  cancelled:'Cancelled'
-};
-var _STATUS_COLORS = {
-  pending_confirmation:'#d97706', confirmed:'#1d4ed8',
-  payment_submitted:'#7c3aed',   processing:'#0891b2',
-  shipped:'var(--accent)',        delivered:'var(--accent-ink)',
-  cancelled:'var(--danger)'
-};
+function _orderStatusLabel(s){
+  return {all:'All',pending_confirmation:'Awaiting Confirmation',confirmed:'Payment Requested',
+    payment_submitted:'Payment Submitted',processing:'Processing',shipped:'Shipped',
+    delivered:'Delivered',cancelled:'Cancelled'}[s]||s.replace(/_/g,' ');
+}
+function _orderStatusColor(s){
+  return {pending_confirmation:'#d97706',confirmed:'#1d4ed8',payment_submitted:'#7c3aed',
+    processing:'#0891b2',shipped:'var(--accent)',delivered:'var(--accent-ink)',
+    cancelled:'var(--danger)'}[s]||'var(--ink-soft)';
+}
 
 /* --- confirmOrder modal (called from row button) ---------------------- */
 function confirmOrder(orderId) {
@@ -3698,15 +3692,21 @@ function viewCustomerOrders() {
   var c=document.getElementById('content');
   c.innerHTML='<div class="card pad muted" style="text-align:center">Loading orders…</div>';
   _fdb.collection('businesses').doc(State.user.uid)
-    .collection('customerOrders').orderBy('date','desc').limit(200).get()
+    .collection('customerOrders').limit(200).get()
     .then(function(snap){
-      _customerOrders=snap.docs.map(function(d){ return d.data(); });
+      _customerOrders=snap.docs.map(function(d){ return d.data(); })
+        .sort(function(a,b){ return (b.date||'')>(a.date||'')?1:-1; });
       _renderOrders();
     })
     .catch(function(e){
+      var msg = e&&e.message ? e.message : String(e);
+      var isIndex = msg.includes('index') || msg.includes('Index');
       c.innerHTML='<div class="card pad" style="background:var(--amber-soft);border-color:var(--amber)">' +
-        '<b>Could not load orders.</b><br>'+esc(e.message)+
-        '<br><small>Make sure Firestore rules are published and include customerOrders subcollection.</small></div>';
+        '<b>Could not load orders.</b><br>'+esc(msg)+
+        '<br><small>'+(isIndex
+          ? 'Firestore needs a query index. Go to Firebase Console &rarr; Firestore &rarr; Indexes and create a composite index on customerOrders (date DESC). Or the query has been simplified to avoid this.'
+          : 'Make sure Firestore rules are published and include the customerOrders subcollection rules.')+
+        '</small></div>';
     });
 }
 
@@ -3727,7 +3727,7 @@ function _renderOrders() {
 
   /* tabs */
   var tabs=statusList.map(function(s){
-    var lbl=_STATUS_LABELS[s]||s;
+    var lbl=_orderStatusLabel(s);
     var cnt=s!=='all'&&counts[s]?' ('+counts[s]+')':'';
     return '<button class="'+(_ordersFilter===s?'active':'')+
       '" onclick="filterOrders(\''+s+'\')">'+lbl+cnt+'</button>';
@@ -3760,12 +3760,12 @@ function _renderOrders() {
 
   var allSt=['pending_confirmation','confirmed','payment_submitted','processing','shipped','delivered','cancelled'];
   var rows=filtered.map(function(o){
-    var col=_STATUS_COLORS[o.status]||'var(--ink-soft)';
-    var lbl=_STATUS_LABELS[o.status]||o.status;
+    var col=_orderStatusColor(o.status)||'var(--ink-soft)';
+    var lbl=_orderStatusLabel(o.status);
     var isPend=o.status==='pending_confirmation';
     var hasSlip=o.payment&&o.payment.slipDataUrl;
     var ddOpts=allSt.map(function(s){
-      return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+(_STATUS_LABELS[s]||s)+'</option>';
+      return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+(_orderStatusLabel(s))+'</option>';
     }).join('');
     return '<tr>' +
       '<td style="font-weight:600"><span class="mono">#'+esc(o.number||o.id.slice(-6))+'</span></td>' +
@@ -3814,7 +3814,7 @@ function _showOrderModal(o) {
   var hist=(o.timeline||[]).slice().reverse().map(function(t){
     return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:13px">' +
       '<span style="background:var(--accent-soft);color:var(--accent-ink);padding:2px 10px;' +
-        'border-radius:20px;font-weight:600;white-space:nowrap">'+esc(_STATUS_LABELS[t.status]||t.status)+'</span>' +
+        'border-radius:20px;font-weight:600;white-space:nowrap">'+esc(_orderStatusLabel(t.status))+'</span>' +
       '<span class="muted">'+fmtDate(t.date)+' '+esc(t.time||'')+'</span>' +
       (t.note?'<span>'+esc(t.note)+'</span>':'') +
     '</div>';
@@ -3824,7 +3824,7 @@ function _showOrderModal(o) {
       '<img src="'+o.payment.slipDataUrl+'" style="max-width:100%;border-radius:10px;border:1px solid var(--line)"></div>'
     : '';
   var ddOpts=allSt.map(function(s){
-    return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+(_STATUS_LABELS[s]||s)+'</option>';
+    return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+(_orderStatusLabel(s))+'</option>';
   }).join('');
   var body=
     '<div class="fgrid">' +
@@ -3869,7 +3869,7 @@ function updateOrderStatus(orderId, status, note) {
   _fdb.collection('businesses').doc(State.user.uid).collection('customerOrders').doc(orderId)
     .update({status:status, timeline:firebase.firestore.FieldValue.arrayUnion(entry)})
     .then(function(){
-      toast('Status updated: '+(_STATUS_LABELS[status]||status));
+      toast('Status updated: '+(_orderStatusLabel(status)));
       // Update cache too
       var idx=_customerOrders.findIndex(function(o){ return o.id===orderId; });
       if(idx>=0){ _customerOrders[idx].status=status; _renderOrders(); }
