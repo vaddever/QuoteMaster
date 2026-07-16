@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QuoteMaster — Quotation & Invoice Suite</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Hanken+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+  
+  
+  
+  <!-- pdf.js — used only by the Zakat module to read uploaded bank statement PDFs client-side -->
+  <link rel="stylesheet" href="style.css">
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
+</head>
+<body>
+<!-- ============ AUTH ============ -->
+<div id="auth">
+  <div class="auth-art">
+    <div class="wm-top serif" style="font-size:20px;font-weight:600">QuoteMaster</div>
+    <div>
+      <h1>Quotes &amp; invoices,<br>handled beautifully.</h1>
+      <p style="margin-top:16px">Create branded quotations and invoices, track deliveries, and get paid — all backed by your own Google Sheet. No database to manage.</p>
+    </div>
+    <div class="auth-feats">
+      <div><span class="dot"></span> Branded PDF quotations &amp; invoices</div>
+      <div><span class="dot"></span> Your own business name, logo &amp; settings</div>
+      <div><span class="dot"></span> Delivery tracking &amp; email — on Pro</div>
+    </div>
+  </div>
+  <div class="auth-form">
+    <div class="auth-card">
+      <div class="wm"><span class="brandmark">Q</span> QuoteMaster</div>
+      <p class="muted" id="authSub" style="margin-bottom:18px">Create your business account</p>
+
+      <div id="regFields">
+        <div class="field"><label>Business name</label><input id="r_biz" placeholder="Acme Trading Pvt Ltd" /></div>
+      </div>
+      <div class="field"><label>Email</label><input id="a_email" type="email" placeholder="you@business.com" /></div>
+      <div class="field"><label>Password</label><input id="a_pass" type="password" placeholder="••••••••" /></div>
+      <div class="err" id="authErr"></div>
+      <button class="btn accent block" id="authBtn">Create account</button>
+      <div class="auth-switch" id="authToggle">Already have an account? <a>Sign in</a></div>
+      <div class="auth-switch" style="margin-top:18px;font-size:12px">Demo runs entirely in your browser. <a id="demoLink">Try the demo account →</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <div class="layout">
+    <aside class="side">
+      <div class="wm"><span class="brandmark">Q</span> QuoteMaster</div>
+      <nav class="nav" id="nav">
+        <div class="nav-group">Workspace</div>
+        <a data-view="dashboard"><span class="ic" data-i="grid"></span> Dashboard</a>
+        <a data-view="items"><span class="ic" data-i="box"></span> Products</a>
+        <a data-view="stock" data-feature="stock"><span class="ic" data-i="layers"></span> Stock <span class="lock" data-lock data-feature-lock="stock">PRO</span></a>
+        <a data-view="customers"><span class="ic" data-i="users"></span> Customers</a>
+        <a data-view="pos"><span class="ic" data-i="pos"></span> POS</a>
+        <a data-view="employees"><span class="ic" data-i="badge"></span> Employees</a>
+        <div class="nav-group">Finance</div>
+        <a data-view="expenses" data-feature="expenses"><span class="ic" data-i="wallet"></span> Expenses <span class="lock" data-lock data-feature-lock="expenses">PRO</span></a>
+        <a data-view="gst" data-feature="gst"><span class="ic" data-i="receipt"></span> GST <span class="lock" data-lock data-feature-lock="gst">PRO</span></a>
+        <a data-view="zakat" data-feature="zakat"><span class="ic" data-i="moon"></span> Zakat ☪ <span class="lock" data-lock data-feature-lock="zakat">PRO</span></a>
+        <div class="nav-group">Sales</div>
+        <a data-view="quotations"><span class="ic" data-i="doc"></span> Quotations</a>
+        <a data-view="invoices"><span class="ic" data-i="receipt"></span> Invoices</a>
+        <a data-view="orders" data-feature="orders"><span class="ic" data-i="bag"></span> Customer Orders</a>
+        <div class="nav-group">Operations <span class="badge pro" style="font-size:9px">PRO</span></div>
+        <a data-view="deliveries" data-feature="deliveries"><span class="ic" data-i="truck"></span> Deliveries <span class="lock" data-lock data-feature-lock="deliveries">PRO</span></a>
+        <a data-view="email" data-feature="email"><span class="ic" data-i="mail"></span> Email <span class="lock" data-lock data-feature-lock="email">PRO</span></a>
+        <a data-view="team" data-feature="team"><span class="ic" data-i="team"></span> Team access <span class="lock" data-lock data-feature-lock="team">PRO</span></a>
+        <div class="nav-group">Account</div>
+        <a data-view="settings"><span class="ic" data-i="gear"></span> Settings</a>
+        <div class="nav-group" id="adminGroup" style="display:none">Superadmin</div>
+        <a data-view="admin" id="adminLink" style="display:none;border:1px solid rgba(255,200,100,.3);background:rgba(255,200,100,.06)"><span class="ic" data-i="shield"></span> Portal Admin</a>
+      </nav>
+      <div class="side-foot">
+        <div class="plan-card" id="planCard">
+          <div class="pt">Current plan</div>
+          <div class="pn" id="planName">Free</div>
+          <button class="btn amber sm block" id="upgradeBtn">Upgrade to Pro</button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="iconbtn" id="menuBtn" title="Menu"><span class="ic" data-i="menu"></span></button>
+        <div class="page-title" id="pageTitle">Dashboard</div>
+        <div class="spacer"></div>
+        <div class="biz-chip">
+          <span class="biz-logo" id="topLogo">A</span>
+          <span id="topBiz" style="font-weight:600">Business</span>
+          <span class="badge free" id="topPlan">FREE</span>
+        </div>
+        <button class="iconbtn" id="logoutBtn" title="Sign out"><span class="ic" data-i="out"></span></button>
+      </header>
+      <div class="content" id="content"></div>
+    </div>
+  </div>
+  <div id="navScrim"></div>
+</div>
+
+<!-- modal + toast + print -->
+<div class="scrim" id="scrim"><div class="modal" id="modal"></div></div>
+<div id="toast"></div>
+<div id="printRoot"></div>
+
+<!-- Portal modules - each module is a separate manageable file -->
+<script src="js/core.js"></script>
+<script src="js/mod-dashboard.js"></script>
+<script src="js/mod-products.js"></script>
+<script src="js/mod-stock.js"></script>
+<script src="js/mod-customers.js"></script>
+<script src="js/mod-invoices.js"></script>
+<script src="js/mod-deliveries.js"></script>
+<script src="js/mod-email.js"></script>
+<script src="js/mod-settings.js"></script>
+<script src="js/mod-zakat.js"></script>
+<script src="js/mod-gst.js"></script>
+<script src="js/mod-expenses.js"></script>
+<script src="js/mod-barcode.js"></script>
+<script src="js/mod-employees.js"></script>
+<script src="js/mod-pos.js"></script>
+<script src="js/mod-team.js"></script>
+<script src="js/mod-admin.js"></script>
+<script src="js/mod-upgrade.js"></script>
+<script src="js/mod-orders.js"></script>
+</body>
+</html>

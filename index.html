@@ -1,119 +1,219 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>QuoteMaster — Quotation & Invoice Suite</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Hanken+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@500;600&display=swap" rel="stylesheet">
-
-  
-  
-  
-  <!-- pdf.js — used only by the Zakat module to read uploaded bank statement PDFs client-side -->
-  <link rel="stylesheet" href="style.css">
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QuoteMaster — Business Directory</title>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root{--accent:#0f6d5a;--accent-soft:#e3f0ea;--accent-ink:#0b4a3c;--ink:#1b1d24;--ink-soft:#5b5d68;
+  --line:#e4ded2;--paper:#f6f3ec;--card:#fffdf8;--danger:#b3261e}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hanken Grotesk',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;border:none}
+input,select{font-family:inherit;font-size:15px;color:var(--ink);outline:none}
+/* Hero */
+.hero{background:linear-gradient(135deg,#0b4a3c,#1a7a65);color:#fff;padding:50px 20px 60px;text-align:center}
+.hero h1{font-size:clamp(26px,5vw,46px);font-weight:800;margin-bottom:10px}
+.hero p{font-size:clamp(14px,2vw,18px);opacity:.85;margin-bottom:28px;max-width:520px;margin-inline:auto}
+.hero-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.hero-btns a,.hero-btns button{padding:12px 24px;border-radius:11px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
+.btn-primary{background:#fff;color:var(--accent-ink)}
+.btn-outline{background:transparent;border:2px solid rgba(255,255,255,.6);color:#fff}
+.btn-outline:hover{background:rgba(255,255,255,.1)}
+/* Search */
+.search-bar{max-width:720px;margin:-24px auto 0;background:var(--card);border-radius:14px;padding:16px;display:grid;grid-template-columns:1fr auto auto;gap:10px;box-shadow:0 4px 24px rgba(0,0,0,.12);position:relative;z-index:10}
+@media(max-width:600px){.search-bar{grid-template-columns:1fr;margin:12px 14px 0}}
+.search-bar input{padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;width:100%;font-size:15px}
+.search-bar select{padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--paper)}
+.search-bar button{padding:10px 20px;background:var(--accent);color:#fff;border-radius:10px;font-size:14px;font-weight:700;white-space:nowrap}
+/* Main content */
+.container{max-width:1200px;margin:0 auto;padding:30px 20px}
+.section-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.section-hd h2{font-size:20px;font-weight:700}
+.count-badge{font-size:13px;color:var(--ink-soft)}
+/* Business grid */
+.biz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+@media(max-width:480px){.biz-grid{grid-template-columns:1fr}}
+.biz-card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;overflow:hidden;transition:.15s;cursor:pointer;text-decoration:none;color:inherit;display:flex;flex-direction:column}
+.biz-card:hover{transform:translateY(-3px);box-shadow:0 8px 28px rgba(0,0,0,.1);border-color:var(--accent)}
+.biz-banner{height:100px;background:linear-gradient(135deg,#0b4a3c,#1a7a65);display:grid;place-items:center;position:relative}
+.biz-logo{width:64px;height:64px;border-radius:14px;background:#fff;display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--accent-ink);overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.15);border:3px solid #fff}
+.biz-logo img{width:100%;height:100%;object-fit:cover;border-radius:11px}
+.biz-cat-chip{position:absolute;top:10px;right:10px;background:rgba(255,255,255,.2);color:#fff;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:20px}
+.biz-body{padding:14px}
+.biz-name{font-size:17px;font-weight:700;margin-bottom:4px}
+.biz-desc{font-size:13.5px;color:var(--ink-soft);margin-bottom:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:40px}
+.order-btn{display:block;width:100%;padding:12px;background:var(--accent);color:#fff;border-radius:11px;font-size:14.5px;font-weight:700;text-align:center;text-decoration:none;transition:.12s;margin-top:auto}
+.order-btn:hover{background:var(--accent-ink)}
+/* Category filter pills */
+.cat-pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.cat-pill{padding:6px 16px;border-radius:20px;border:1.5px solid var(--line);background:var(--card);font-size:13px;font-weight:600;cursor:pointer;transition:.12s;color:var(--ink-soft)}
+.cat-pill.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+/* Loading / empty */
+.spin{width:32px;height:32px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:40px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:50px 20px;color:var(--ink-soft)}
+.empty h3{font-size:20px;margin-bottom:8px;color:var(--ink)}
+/* Footer */
+footer{background:#13241f;color:#9fc0b6;text-align:center;padding:30px 20px;margin-top:60px;font-size:13.5px}
+footer a{color:var(--accent-soft);text-decoration:none}
+footer .biz-link{display:inline-block;margin-top:12px;padding:10px 24px;background:var(--accent);color:#fff;border-radius:10px;font-weight:700;text-decoration:none;font-size:14px}
+</style>
 </head>
 <body>
-<!-- ============ AUTH ============ -->
-<div id="auth">
-  <div class="auth-art">
-    <div class="wm-top serif" style="font-size:20px;font-weight:600">QuoteMaster</div>
-    <div>
-      <h1>Quotes &amp; invoices,<br>handled beautifully.</h1>
-      <p style="margin-top:16px">Create branded quotations and invoices, track deliveries, and get paid — all backed by your own Google Sheet. No database to manage.</p>
-    </div>
-    <div class="auth-feats">
-      <div><span class="dot"></span> Branded PDF quotations &amp; invoices</div>
-      <div><span class="dot"></span> Your own business name, logo &amp; settings</div>
-      <div><span class="dot"></span> Delivery tracking &amp; email — on Pro</div>
-    </div>
-  </div>
-  <div class="auth-form">
-    <div class="auth-card">
-      <div class="wm"><span class="brandmark">Q</span> QuoteMaster</div>
-      <p class="muted" id="authSub" style="margin-bottom:18px">Create your business account</p>
 
-      <div id="regFields">
-        <div class="field"><label>Business name</label><input id="r_biz" placeholder="Acme Trading Pvt Ltd" /></div>
-      </div>
-      <div class="field"><label>Email</label><input id="a_email" type="email" placeholder="you@business.com" /></div>
-      <div class="field"><label>Password</label><input id="a_pass" type="password" placeholder="••••••••" /></div>
-      <div class="err" id="authErr"></div>
-      <button class="btn accent block" id="authBtn">Create account</button>
-      <div class="auth-switch" id="authToggle">Already have an account? <a>Sign in</a></div>
-      <div class="auth-switch" style="margin-top:18px;font-size:12px">Demo runs entirely in your browser. <a id="demoLink">Try the demo account →</a></div>
-    </div>
+<div class="hero">
+  <h1>&#128722; Find &amp; Order Local</h1>
+  <p>Browse businesses and order directly — simple, fast, and trackable</p>
+  <div class="hero-btns">
+    <a href="portal.html" class="btn-primary">&#128274; Business Login</a>
+    <a href="portal.html#register" class="btn-outline">Register your business</a>
   </div>
 </div>
 
-<!-- ============ APP ============ -->
-<div id="app">
-  <div class="layout">
-    <aside class="side">
-      <div class="wm"><span class="brandmark">Q</span> QuoteMaster</div>
-      <nav class="nav" id="nav">
-        <div class="nav-group">Workspace</div>
-        <a data-view="dashboard"><span class="ic" data-i="grid"></span> Dashboard</a>
-        <a data-view="items"><span class="ic" data-i="box"></span> Products</a>
-        <a data-view="stock" data-feature="stock"><span class="ic" data-i="layers"></span> Stock <span class="lock" data-lock data-feature-lock="stock">PRO</span></a>
-        <a data-view="customers"><span class="ic" data-i="users"></span> Customers</a>
-        <a data-view="pos"><span class="ic" data-i="pos"></span> POS</a>
-        <a data-view="employees"><span class="ic" data-i="badge"></span> Employees</a>
-        <div class="nav-group">Finance</div>
-        <a data-view="expenses" data-feature="expenses"><span class="ic" data-i="wallet"></span> Expenses <span class="lock" data-lock data-feature-lock="expenses">PRO</span></a>
-        <a data-view="gst" data-feature="gst"><span class="ic" data-i="receipt"></span> GST <span class="lock" data-lock data-feature-lock="gst">PRO</span></a>
-        <a data-view="zakat" data-feature="zakat"><span class="ic" data-i="moon"></span> Zakat ☪ <span class="lock" data-lock data-feature-lock="zakat">PRO</span></a>
-        <div class="nav-group">Sales</div>
-        <a data-view="quotations"><span class="ic" data-i="doc"></span> Quotations</a>
-        <a data-view="invoices"><span class="ic" data-i="receipt"></span> Invoices</a>
-        <a data-view="orders" data-feature="orders"><span class="ic" data-i="bag"></span> Customer Orders</a>
-        <div class="nav-group">Operations <span class="badge pro" style="font-size:9px">PRO</span></div>
-        <a data-view="deliveries" data-feature="deliveries"><span class="ic" data-i="truck"></span> Deliveries <span class="lock" data-lock data-feature-lock="deliveries">PRO</span></a>
-        <a data-view="email" data-feature="email"><span class="ic" data-i="mail"></span> Email <span class="lock" data-lock data-feature-lock="email">PRO</span></a>
-        <a data-view="team" data-feature="team"><span class="ic" data-i="team"></span> Team access <span class="lock" data-lock data-feature-lock="team">PRO</span></a>
-        <div class="nav-group">Account</div>
-        <a data-view="settings"><span class="ic" data-i="gear"></span> Settings</a>
-        <div class="nav-group" id="adminGroup" style="display:none">Superadmin</div>
-        <a data-view="admin" id="adminLink" style="display:none;border:1px solid rgba(255,200,100,.3);background:rgba(255,200,100,.06)"><span class="ic" data-i="shield"></span> Portal Admin</a>
-      </nav>
-      <div class="side-foot">
-        <div class="plan-card" id="planCard">
-          <div class="pt">Current plan</div>
-          <div class="pn" id="planName">Free</div>
-          <button class="btn amber sm block" id="upgradeBtn">Upgrade to Pro</button>
-        </div>
-      </div>
-    </aside>
-
-    <div class="main">
-      <header class="topbar">
-        <button class="iconbtn" id="menuBtn" title="Menu"><span class="ic" data-i="menu"></span></button>
-        <div class="page-title" id="pageTitle">Dashboard</div>
-        <div class="spacer"></div>
-        <div class="biz-chip">
-          <span class="biz-logo" id="topLogo">A</span>
-          <span id="topBiz" style="font-weight:600">Business</span>
-          <span class="badge free" id="topPlan">FREE</span>
-        </div>
-        <button class="iconbtn" id="logoutBtn" title="Sign out"><span class="ic" data-i="out"></span></button>
-      </header>
-      <div class="content" id="content"></div>
-    </div>
-  </div>
-  <div id="navScrim"></div>
+<div class="search-bar">
+  <input id="searchQ" placeholder="&#128269; Search businesses…" oninput="filterBiz()">
+  <select id="catFilter" onchange="filterBiz()">
+    <option value="">All categories</option>
+    <option>Retail</option>
+    <option>Restaurant &amp; Food</option>
+    <option>Grocery</option>
+    <option>Electronics</option>
+    <option>Fashion &amp; Clothing</option>
+    <option>Services</option>
+    <option>Healthcare</option>
+    <option>Education</option>
+    <option>Travel &amp; Tourism</option>
+    <option>Other</option>
+  </select>
+  <button onclick="filterBiz()">Search</button>
 </div>
 
-<!-- modal + toast + print -->
-<div class="scrim" id="scrim"><div class="modal" id="modal"></div></div>
-<div id="toast"></div>
-<div id="printRoot"></div>
+<div class="container">
+  <div id="catPills" class="cat-pills"></div>
+  <div class="section-hd">
+    <h2>Businesses</h2>
+    <span class="count-badge" id="bizCount"></span>
+  </div>
+  <div id="bizGrid"><div class="spin"></div></div>
+</div>
 
-<script src="app.js"></script>
+<footer>
+  <div>Powered by <strong>QuoteMaster</strong> &mdash; business management for the Maldives</div>
+  <a class="biz-link" href="portal.html">&#128274; Business Portal Login</a>
+</footer>
+
+<script>
+const FIREBASE_CONFIG = {
+  apiKey:"AIzaSyD5NPIUGMbs8qQfU-PekQMMT2EWDzNBj-4",
+  authDomain:"quote-master-eed65.firebaseapp.com",
+  projectId:"quote-master-eed65",
+  storageBucket:"quote-master-eed65.firebasestorage.app",
+  messagingSenderId:"530335083320",
+  appId:"1:530335083320:web:9828da5df710ce26ae6fcd"
+};
+firebase.initializeApp(FIREBASE_CONFIG);
+var fdb=firebase.firestore();
+
+var _allBiz=[], _selectedCat='';
+
+function esc(s){return String(s||'').replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+function getPortalBase(){
+  var base=location.href.split('?')[0];
+  // Strip index.html from base to get directory
+  return base.replace(/index\.html$/,'');
+}
+
+// Load all businesses with showInDirectory = true
+(async function(){
+  try{
+    var snap=await fdb.collection('portals').where('showInDirectory','==',true).get();
+    _allBiz=snap.docs.map(function(d){
+      var data=d.data();
+      return Object.assign({token:d.id},data);
+    });
+    // Client-side: also fetch without filter in case index isn't ready
+    if(!_allBiz.length){
+      var snap2=await fdb.collection('portals').limit(50).get();
+      _allBiz=snap2.docs.map(function(d){
+        var data=d.data();
+        if(data.showInDirectory===false)return null;
+        return Object.assign({token:d.id},data);
+      }).filter(Boolean);
+    }
+    renderCatPills();
+    renderGrid(_allBiz);
+  }catch(e){
+    document.getElementById('bizGrid').innerHTML='<div class="empty"><h3>Could not load businesses</h3><p>'+esc(e.message)+'</p></div>';
+  }
+})();
+
+function renderCatPills(){
+  var cats={};
+  _allBiz.forEach(function(b){ if(b.category)cats[b.category]=(cats[b.category]||0)+1; });
+  var pills=Object.keys(cats).sort();
+  document.getElementById('catPills').innerHTML=
+    '<button class="cat-pill active" onclick="setCat(\'\',this)">All ('+_allBiz.length+')</button>'+
+    pills.map(function(c){
+      return '<button class="cat-pill" onclick="setCat(\''+esc(c)+'\',this)">'+esc(c)+' ('+cats[c]+')</button>';
+    }).join('');
+}
+
+function setCat(cat,btn){
+  _selectedCat=cat;
+  document.querySelectorAll('.cat-pill').forEach(function(p){p.classList.remove('active');});
+  if(btn)btn.classList.add('active');
+  document.getElementById('catFilter').value=cat;
+  filterBiz();
+}
+
+function filterBiz(){
+  var q=document.getElementById('searchQ').value.toLowerCase();
+  var cat=document.getElementById('catFilter').value;
+  _selectedCat=cat;
+  var filtered=_allBiz.filter(function(b){
+    var matchQ=!q||(b.businessName||'').toLowerCase().includes(q)||
+      (b.description||'').toLowerCase().includes(q)||(b.category||'').toLowerCase().includes(q);
+    var matchCat=!cat||b.category===cat;
+    return matchQ&&matchCat;
+  });
+  renderGrid(filtered);
+}
+
+function renderGrid(businesses){
+  var base=getPortalBase();
+  var grid=document.getElementById('bizGrid');
+  var count=document.getElementById('bizCount');
+  if(!businesses.length){
+    grid.innerHTML='<div class="empty"><h3>No businesses found</h3><p>Try a different search or category.</p></div>';
+    count.textContent='';
+    return;
+  }
+  count.textContent=businesses.length+' business'+(businesses.length===1?'':'es');
+  grid.innerHTML=businesses.map(function(b){
+    var logoHtml=b.logo
+      ?'<img src="'+esc(b.logo)+'">'
+      :'<span>'+esc((b.businessName||'?')[0].toUpperCase())+'</span>';
+    // Auto-pick a gradient colour from business name
+    var colors=['#0b4a3c,#1a7a65','#1e3a8a,#2563eb','#7c2d12,#c2410c','#4c1d95,#7c3aed','#14532d,#16a34a'];
+    var ci=((b.businessName||'').charCodeAt(0)||0)%colors.length;
+    return '<a class="biz-card" href="'+esc(base+'order.html?b='+b.token)+'">'+
+      '<div class="biz-banner" style="background:linear-gradient(135deg,'+colors[ci]+')">'+
+        '<div class="biz-logo">'+logoHtml+'</div>'+
+        (b.category?'<span class="biz-cat-chip">'+esc(b.category)+'</span>':'')+
+      '</div>'+
+      '<div class="biz-body">'+
+        '<div class="biz-name">'+esc(b.businessName||'Business')+'</div>'+
+        '<div class="biz-desc">'+(b.description?esc(b.description):'<span style="color:var(--line)">No description provided.</span>')+'</div>'+
+        '<span class="order-btn">Browse &amp; Order</span>'+
+      '</div>'+
+    '</a>';
+  }).join('');
+}
+</script>
 </body>
 </html>
