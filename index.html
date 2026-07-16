@@ -47,7 +47,7 @@ button,input,select{font-family:inherit;cursor:pointer;outline:none}
 .cat-pill.active{background:var(--accent-soft);color:var(--accent-ink);border:1.5px solid var(--accent)}
 
 /* ── Business grid (desktop) ────────────────────────────────────────────── */
-.biz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+.biz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
 
 /* ── Business card ───────────────────────────────────────────────────────── */
 .biz-card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;
@@ -149,16 +149,17 @@ footer a{color:var(--accent-soft);text-decoration:none}
   .biz-body    { padding:8px }
   .biz-name    { font-size:13px; font-weight:700; gap:3px; margin-bottom:2px; flex-wrap:wrap }
   .open-badge  { font-size:10px; padding:1px 7px }
-  .biz-hours   { font-size:10.5px; line-height:1.4; margin-bottom:5px }
+  .biz-hours   { font-size:10.5px; line-height:1.3; margin-bottom:4px }
   .biz-desc    { font-size:11.5px; -webkit-line-clamp:1; min-height:0; margin-bottom:8px }
   .order-btn   { padding:8px 4px; font-size:12.5px; border-radius:8px }
 
   footer { margin-top:20px; padding:16px 12px }
 }
 
-/* Very narrow (< 340px): single column */
+/* Very narrow: still 2 columns, just tighter */
 @media(max-width:339px){
-  .biz-grid { grid-template-columns:1fr }
+  .biz-grid { grid-template-columns:1fr 1fr; gap:5px }
+  .biz-body { padding:7px }
 }
 </style>
 </head>
@@ -310,9 +311,8 @@ function renderGrid(businesses){
     var badge=open===null?'':open
       ?'<span class="open-badge open-yes">Open</span>'
       :'<span class="open-badge open-no">Closed</span>';
-    var daysStr=(b.openDays||[]).map(function(d){return dayLabels[d]||d;}).join(' · ');
     var hours=(b.openTime&&b.closeTime)
-      ?'<div class="biz-hours">&#128336; '+_fmtT(b.openTime)+' – '+_fmtT(b.closeTime)+(daysStr?' &middot; '+esc(daysStr):'')+'</div>':'';
+      ?'<div class="biz-hours">&#128336; '+_fmtT(b.openTime)+' – '+_fmtT(b.closeTime)+'</div>':'';
     var logoHtml=b.logo?'<img src="'+esc(b.logo)+'">':'<span>'+esc((b.businessName||'?')[0].toUpperCase())+'</span>';
     var ci=((b.businessName||'').charCodeAt(0)||0)%GRAD_COLORS.length;
     return '<a class="biz-card" href="'+esc(base+'order.html?b='+b.token)+'">'+
