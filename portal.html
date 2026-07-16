@@ -16,8 +16,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}</script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script>if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';}</script>
 </head>
 <body>
 <!-- ============ AUTH ============ -->
@@ -114,25 +114,6 @@
 <div id="toast"></div>
 <div id="printRoot"></div>
 
-<!-- Portal modules - each module is a separate manageable file -->
-<script src="js/core.js"></script>
-<script src="js/mod-dashboard.js"></script>
-<script src="js/mod-products.js"></script>
-<script src="js/mod-stock.js"></script>
-<script src="js/mod-customers.js"></script>
-<script src="js/mod-invoices.js"></script>
-<script src="js/mod-deliveries.js"></script>
-<script src="js/mod-email.js"></script>
-<script src="js/mod-settings.js"></script>
-<script src="js/mod-zakat.js"></script>
-<script src="js/mod-gst.js"></script>
-<script src="js/mod-expenses.js"></script>
-<script src="js/mod-barcode.js"></script>
-<script src="js/mod-employees.js"></script>
-<script src="js/mod-pos.js"></script>
-<script src="js/mod-team.js"></script>
-<script src="js/mod-admin.js"></script>
-<script src="js/mod-upgrade.js"></script>
-<script src="js/mod-orders.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

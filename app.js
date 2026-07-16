@@ -1,3 +1,10 @@
+/* QuoteMaster — app.js
+ * Bundled from js/ module files.
+ * To edit a module: edit the file in js/ then run: node build.js
+ * Modules: core, mod-dashboard, mod-products, mod-stock, mod-customers, mod-invoices, mod-deliveries, mod-email, mod-settings, mod-zakat, mod-gst, mod-expenses, mod-barcode, mod-employees, mod-pos, mod-team, mod-admin, mod-upgrade, mod-orders
+ */
+
+/* ── MODULE: core ── */
 /* QuoteMaster — Application */
 
 // pre-declare globals to prevent TDZ errors
@@ -92,6 +99,9 @@ function syncPortal(uid) {
     taxLabel: s.taxLabel || 'GST',
     taxRate: s.taxRate || 6,
     bankDetails: s.bankDetails || '',
+    showInDirectory: s.showInDirectory||false,
+    description: s.businessDescription||'',
+    category: s.businessCategory||'Retail',
     updatedAt: new Date().toISOString(),
     items: (State.db.items || [])
       .filter(function(i){ return i.unitPrice > 0; })
@@ -112,7 +122,8 @@ function starterDb(businessName, email) {
       quotePrefix:'QT-', invoicePrefix:'INV-', deliveryPrefix:'DN-', posPrefix:'TXN-',
       quoteValidity:14, paymentTerms:'Payment due within 14 days.',
       bankDetails:'', quoteFooter:'', invoiceFooter:'', senderName:businessName||'',
-      senderEmail:email||'', posToken:'', orderToken:'', uoms:['pc','kg','g','L','mL','m','box','bag','pair'],
+      senderEmail:email||'', posToken:'', orderToken:'',
+      showInDirectory:false, businessDescription:'', businessCategory:'Retail', uoms:['pc','kg','g','L','mL','m','box','bag','pair'],
       zakatNisabStd:'silver', zakatSilverPrice:32.82, zakatGoldPrice:440 },
     counters:{ quote:1, invoice:1, delivery:1, pos:1 },
     items:[], customers:[], quotations:[], invoices:[], deliveries:[],
@@ -402,6 +413,9 @@ function lockedView(view){
    <button class="btn amber" onclick="openUpgrade()">See Pro plans</button></div>`;
 }
 
+
+
+/* ── MODULE: mod-dashboard ── */
 /* ============================================================
    DASHBOARD
    ============================================================ */
@@ -572,6 +586,9 @@ function viewDashboard(){
 }
 function emptyBox(t,s){return `<div class="card empty"><div class="ic" data-i="empty" style="margin:0 auto 10px;width:42px;height:42px;opacity:.4">${svg('empty',42)}</div><h3>${t}</h3><p class="muted">${s}</p></div>`;}
 
+
+
+/* ── MODULE: mod-products ── */
 /* ============================================================
    PRODUCTS  (cost, selling, margin, UOM datalist, barcode)
    ============================================================ */
@@ -750,6 +767,9 @@ function applyMarkup(){
 }
 function delItem(id){confirmDel('Delete this product?',()=>{State.db.items=State.db.items.filter(i=>i.id!==id);persist();viewItems();toast('Product deleted');});}
 
+
+
+/* ── MODULE: mod-stock ── */
 /* ============================================================
    STOCK MANAGEMENT
    ============================================================ */
@@ -967,6 +987,9 @@ function updateStockAdjustBalance(){
   if(el&&item)el.textContent=(item.stockQty||0)+' '+(item.unit||'pc');
 }
 
+
+
+/* ── MODULE: mod-customers ── */
 /* ============================================================
    CUSTOMERS
    ============================================================ */
@@ -1021,6 +1044,9 @@ function quoteForCustomer(id){
     ['c_name','c_email','c_phone','c_addr'].forEach((fid,i)=>{const el=document.getElementById(fid);if(el)el.value=[c.name,c.email,c.phone,c.address][i]||'';}); },60);
 }
 
+
+
+/* ── MODULE: mod-invoices ── */
 /* ============================================================
    QUOTATIONS / INVOICES (shared)
    ============================================================ */
@@ -1223,6 +1249,9 @@ function buildDocHtml(type,d){
   </div>`;
 }
 
+
+
+/* ── MODULE: mod-deliveries ── */
 /* ============================================================
    DELIVERIES (PRO)
    ============================================================ */
@@ -1303,6 +1332,9 @@ function printDelivery(id){
   setTimeout(()=>window.print(),120);
 }
 
+
+
+/* ── MODULE: mod-email ── */
 /* ============================================================
    EMAIL (PRO) — demo: queues to Outbox. Production: backend sends.
    ============================================================ */
@@ -1350,6 +1382,9 @@ function composeEmail(pre={}){
     }}]);
 }
 
+
+
+/* ── MODULE: mod-settings ── */
 /* ============================================================
    SETTINGS
    ============================================================ */
@@ -1438,6 +1473,28 @@ function viewSettings(){
         <div class="field"><label>Reply-to email</label><input id="s_semail" value="${esc(s.senderEmail||s.email)}" placeholder="${esc(s.email)}"></div>
         <div class="field"><label>POS receipt prefix</label><input id="s_pos" value="${esc(s.posPrefix||'TXN-')}"></div>
       </div>
+
+      <div class="card pad" style="grid-column:1/-1;border-left:3px solid var(--accent)">
+        <h3 style="margin-bottom:14px">&#127758; Public Business Directory</h3>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+          <div>
+            <div style="font-weight:600">Show in QuoteMaster directory</div>
+            <div class="muted" style="font-size:12.5px;margin-top:3px">Allow customers to find and order from your business on the public marketplace</div>
+          </div>
+          <select id="s_dir" style="border:1px solid var(--line);border-radius:9px;padding:8px 12px;flex-shrink:0">
+            <option value="1" \${s.showInDirectory?'selected':''}>Yes — show in directory</option>
+            <option value="0" \${!s.showInDirectory?'selected':''}>No — keep private</option>
+          </select>
+        </div>
+        <div class="fgrid">
+          <div class="field"><label>Business category</label>
+            <select id="s_cat" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px">
+              \${['Retail','Restaurant & Food','Grocery','Electronics','Fashion & Clothing','Services','Healthcare','Education','Travel & Tourism','Other'].map(c=>\`<option value="\${esc(c)}" \${s.businessCategory===c?'selected':''}>\${esc(c)}</option>\`).join('')}
+            </select></div>
+          <div class="field"><label>Short description (shown in directory)</label>
+            <textarea id="s_desc" rows="2" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;resize:vertical" placeholder="e.g. Fresh local produce and groceries">\${esc(s.businessDescription||'')}</textarea></div>
+        </div>
+      </div>
       <div style="margin-top:16px"><button class="btn accent" onclick="saveSettings()">Save all settings</button></div>
     </div>
    </div>`;
@@ -1456,6 +1513,9 @@ function saveSettings(){
   persist();refreshChrome();toast('Settings saved');
 }
 
+
+
+/* ── MODULE: mod-zakat ── */
 /* ============================================================
    ZAKAT CALCULATOR
    ============================================================ */
@@ -2470,6 +2530,9 @@ startZakatCalc = function() {
 /* ============================================================
    GST MODULE
    ============================================================ */
+
+
+/* ── MODULE: mod-gst ── */
 /* ============================================================
    GST MODULE — Maldives General Goods & Services Tax
    Rate: 8% (General sector, from 1 Jan 2023)
@@ -2868,6 +2931,9 @@ function gstSaveSettings() {
   viewGST();
 }
 
+
+
+/* ── MODULE: mod-expenses ── */
 /* ============================================================
    EXPENSES
    ============================================================ */
@@ -2956,6 +3022,9 @@ function openExpenseEditor(id){
 }
 function delExpense(id){confirmDel('Delete this expense?',()=>{State.db.expenses=(State.db.expenses||[]).filter(e=>e.id!==id);persist();viewExpenses();toast('Expense deleted');});}
 
+
+
+/* ── MODULE: mod-barcode ── */
 /* ============================================================
    BARCODE SCANNER  (BarcodeDetector API + manual fallback)
    ============================================================ */
@@ -3001,6 +3070,9 @@ function stopScan(){
   if(_scanStream){_scanStream.getTracks().forEach(t=>t.stop());_scanStream=null;}
 }
 
+
+
+/* ── MODULE: mod-employees ── */
 /* ============================================================
    EMPLOYEES
    ============================================================ */
@@ -3075,6 +3147,9 @@ function handleItemImage(file){
 function setEmpActive(id,active){const e=(State.db.employees||[]).find(x=>x.id===id);if(e){e.active=active;persist();}}
 function delEmployee(id){confirmDel('Delete this employee?',()=>{State.db.employees=(State.db.employees||[]).filter(e=>e.id!==id);persist();viewEmployees();toast('Employee removed');});}
 
+
+
+/* ── MODULE: mod-pos ── */
 /* ============================================================
    POS — POINT OF SALE
    ============================================================ */
@@ -3279,6 +3354,9 @@ function viewPOSHistory(){
   renderIcons(c);
 }
 
+
+
+/* ── MODULE: mod-team ── */
 /* ============================================================
    TEAM ACCESS (Pro)
    ============================================================ */
@@ -3356,6 +3434,9 @@ function addUOM(){const v=val('s_newuom').trim();if(!v)return;if(!State.db.setti
 function removeUOM(u){State.db.settings.uoms=(State.db.settings.uoms||[]).filter(x=>x!==u);persist();const tags=document.getElementById('uomTagList');if(tags)tags.innerHTML=State.db.settings.uoms.map(x=>`<span class="uom-tag">${esc(x)}<button onclick="removeUOM('${esc(x)}')">×</button></span>`).join('');}
 function resetPosToken(){confirmDel('Reset the POS link? All staff will need to bookmark the new URL.',()=>{State.db.settings.posToken=uid();persist();viewSettings();toast('POS access link has been reset.');});}
 
+
+
+/* ── MODULE: mod-admin ── */
 /* ============================================================
    SUPERADMIN PORTAL
    ============================================================ */
@@ -3561,6 +3642,9 @@ async function saveAdminSettings(){
   refreshChrome();
 }
 
+
+
+/* ── MODULE: mod-upgrade ── */
 /* ============================================================
    UPGRADE / PAYMENT (demo unlock; production -> Stripe checkout)
    ============================================================ */
@@ -3622,6 +3706,9 @@ renderIcons();
 /* Firebase onAuthStateChanged handles auto-login.
    If no session exists the auth screen stays visible (set by second observer above). */
 
+
+
+/* ── MODULE: mod-orders ── */
 /* ============================================================
    CUSTOMER ORDERS MODULE
    Business-side management of orders from order.html portal
