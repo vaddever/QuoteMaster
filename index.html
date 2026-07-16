@@ -232,7 +232,12 @@ function renderGrid(businesses){
     var openBadge = open===null ? '' :
       open ? '<span style="background:#d1fae5;color:#065f46;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-left:6px">Open</span>' :
              '<span style="background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-left:6px">Closed</span>';
-    var hoursText = (b.openTime && b.closeTime) ? '<div style="font-size:12px;color:var(--ink-soft);margin-top:3px">&#128336; ' + _fmtTime(b.openTime) + ' – ' + _fmtTime(b.closeTime) + (b.branch ? ' &nbsp;&middot;&nbsp; ' + esc(b.branch) : '') + '</div>' : '';
+    var dayNames={mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri',sat:'Sat',sun:'Sun'};
+    var daysText=b.openDays&&b.openDays.length?b.openDays.map(function(d){return dayNames[d]||d;}).join(' · '):'';
+    var hoursText = (b.openTime && b.closeTime) ?
+      '<div style="font-size:12px;color:var(--ink-soft);margin-top:3px">&#128336; ' + _fmtTime(b.openTime) + ' – ' + _fmtTime(b.closeTime) +
+      (daysText?' &nbsp;&middot;&nbsp; '+esc(daysText):'') +
+      (b.branch?' &nbsp;&middot;&nbsp; '+esc(b.branch):'') + '</div>' : '';
     return '<a class="biz-card" href="'+esc(base+'order.html?b='+b.token)+'">'+
       '<div class="biz-banner" style="background:linear-gradient(135deg,'+colors[ci]+')">'+
         '<div class="biz-logo">'+logoHtml+'</div>'+

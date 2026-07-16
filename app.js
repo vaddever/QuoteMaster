@@ -105,6 +105,7 @@ function syncPortal(uid) {
     openTime: s.openTime||'08:00',
     closeTime: s.closeTime||'20:00',
     branch: s.businessBranch||'',
+    openDays: s.openDays||['mon','tue','wed','thu','fri','sat'],
     updatedAt: new Date().toISOString(),
     items: (State.db.items || [])
       .filter(function(i){ return i.unitPrice > 0; })
@@ -126,7 +127,7 @@ function starterDb(businessName, email) {
       quoteValidity:14, paymentTerms:'Payment due within 14 days.',
       bankDetails:'', quoteFooter:'', invoiceFooter:'', senderName:businessName||'',
       senderEmail:email||'', posToken:'', orderToken:'',
-      showInDirectory:false, businessDescription:'', businessCategory:'Retail', openTime:'08:00', closeTime:'20:00', businessBranch:'', uoms:['pc','kg','g','L','mL','m','box','bag','pair'],
+      showInDirectory:false, businessDescription:'', businessCategory:'Retail', openTime:'08:00', closeTime:'20:00', businessBranch:'', openDays:['mon','tue','wed','thu','fri','sat'], uoms:['pc','kg','g','L','mL','m','box','bag','pair'],
       zakatNisabStd:'silver', zakatSilverPrice:32.82, zakatGoldPrice:440 },
     counters:{ quote:1, invoice:1, delivery:1, pos:1 },
     items:[], customers:[], quotations:[], invoices:[], deliveries:[],
@@ -679,7 +680,6 @@ function viewItems(){
 function openItemEditor(id){
   const it=id?State.db.items.find(i=>i.id===id):{name:'',sku:'',barcode:'',desc:'',unitPrice:'',costPrice:'',unit:'pc',taxable:true};
   openModal(`${id?'Edit':'New'} product`,`
-    ${uomDatalist()}
     <!-- Product image upload -->
     <div class="field full" style="margin-bottom:12px">
       <label>Product image (optional)</label>
@@ -699,7 +699,7 @@ function openItemEditor(id){
       <div class="field full"><label>Product name *</label><input id="i_name" value="${esc(it.name)}" placeholder="e.g. A4 Copy Paper"></div>
       <div class="field"><label>SKU / internal code</label><input id="i_sku" value="${esc(it.sku||'')}"></div>
       <div class="field"><label>Barcode (EAN/UPC) <button class="btn ghost tiny" style="margin-left:6px" onclick="openBarcodeScanner(v=>{document.getElementById('i_barcode').value=v;})">${svg('scan',13)} Scan</button></label><input id="i_barcode" value="${esc(it.barcode||'')}" placeholder="Scan or type"></div>
-      <div class="field"><label>Unit of measure</label><input id="i_unit" list="uom_dl" value="${esc(it.unit||'pc')}" placeholder="pc, kg, hr…"></div>
+      <div class="field"><label>Unit of measure (UOM)</label><select id="i_unit" style="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:10px">${(State.db.settings.uoms||['pc','kg','g','L','mL','m','box','bag','pair','hr','day','month','set','dozen']).map(u=>'<option value="'+esc(u)+'"'+(it.unit===u?' selected':'')+'>'+esc(u)+'</option>').join('')}</select></div>
       <div class="field"><label>Cost price (${esc(State.db.settings.currency)}) — internal</label>
         <input id="i_cost" type="number" step="0.01" value="${it.costPrice||''}" placeholder="0.00" oninput="calcItemFields()"></div>
       <div class="field"><label>Selling price (${esc(State.db.settings.currency)}) *</label>
@@ -1505,6 +1505,14 @@ function viewSettings(){
     '</div>'+
     '<div class="field" style="margin-top:12px"><label>Branch / location</label>'+
       '<input id="s_branch" value="'+esc(s.businessBranch||'')+'" placeholder="e.g. Male City, Hulhumale, Addu City" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px"></div>'+
+    '<div class="field" style="margin-top:12px"><label>Open days</label>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">'+
+        [['mon','Mon'],['tue','Tue'],['wed','Wed'],['thu','Thu'],['fri','Fri'],['sat','Sat'],['sun','Sun']].map(function(d){
+          var checked=(s.openDays||['mon','tue','wed','thu','fri','sat']).includes(d[0]);
+          return '<label style="display:flex;align-items:center;gap:5px;padding:5px 12px;border:1.5px solid var(--line);border-radius:9px;cursor:pointer;font-size:13.5px;font-weight:600;background:'+(checked?'var(--accent-soft)':'var(--paper)')+';border-color:'+(checked?'var(--accent)':'var(--line)')+'">'+
+            '<input type="checkbox" id="s_day_'+d[0]+'" value="'+d[0]+'"'+(checked?' checked':'')+' style="width:auto"> '+d[1]+'</label>';
+        }).join('')+
+      '</div></div>'+
   '</div>';
 })()}
 <div style="margin-top:16px"><button class="btn accent" onclick="saveSettings()">Save all settings</button></div>
@@ -1522,7 +1530,22 @@ function saveSettings(){
   s.paymentTerms=val('s_terms');s.bankDetails=val('s_bank');s.quoteFooter=val('s_qfoot');s.invoiceFooter=val('s_ifoot');
   s.senderName=val('s_sname')||s.businessName;s.senderEmail=val('s_semail')||s.email;
   if(val('s_pos'))s.posPrefix=val('s_pos');
-  persist();refreshChrome();toast('Settings saved');
+  // ── Directory & hours ────────────────────────────────────────────────────
+  s.showInDirectory = val('s_dir')==='1';
+  s.businessCategory = val('s_cat')||s.businessCategory||'Retail';
+  s.businessDescription = (document.getElementById('s_desc')||{}).value||'';
+  s.openTime  = val('s_open')||'08:00';
+  s.closeTime = val('s_close')||'20:00';
+  s.businessBranch = val('s_branch')||'';
+  // Open days: collect checked checkboxes
+  var days=['mon','tue','wed','thu','fri','sat','sun'];
+  s.openDays = days.filter(function(d){ var el=document.getElementById('s_day_'+d); return el&&el.checked; });
+  // ─────────────────────────────────────────────────────────────────────────
+  persist();
+  // Force portal sync immediately so directory updates right away
+  var uid=State.user&&State.user.uid;
+  if(uid) syncPortal(uid);
+  refreshChrome();toast('Settings saved');
 }
 
 
@@ -3217,7 +3240,7 @@ function pinKey(k){
 }
 function renderPOS(){
   const s=State.db.settings;
-  const items=(State.db.items||[]).filter(i=>i.name.toLowerCase().includes((_posSearch||'').toLowerCase()));
+  const items=(State.db.items||[]).filter(i=>i&&i.name&&i.name.toLowerCase().includes((_posSearch||'').toLowerCase()));
   const t=calcPosCart();
   const mob=isMob();
   document.getElementById('content').innerHTML=`
@@ -3287,7 +3310,8 @@ function adjCart(ix,delta){
   calcPosCart();renderPOS();
 }
 function calcPosCart(){
-  const rate=State.db.settings.taxRate/100;
+  if(!Array.isArray(posCart))posCart=[];
+  const rate=((State.db&&State.db.settings&&State.db.settings.taxRate)||0)/100;
   let sub=0,tax=0;
   posCart.forEach(ci=>{ci.amount=+(ci.qty*ci.unitPrice).toFixed(2);sub+=ci.amount;if(ci.taxable)tax+=ci.amount*rate;});
   return {subtotal:+sub.toFixed(2),tax:+tax.toFixed(2),total:+(sub+tax).toFixed(2)};
