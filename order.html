@@ -529,6 +529,16 @@ var STAT_CSS={
 
 function renderTrackResult(o){
   var lbl=STAT_LABELS[o.status]||o.status;
+  // Cache status for recent orders display
+  try {
+    var _cached = JSON.parse(localStorage.getItem(_OK)||'[]');
+    var _statusCache = {};
+    try { _statusCache = JSON.parse(localStorage.getItem('qm_order_status')||'{}'); } catch(e){}
+    if (o.number) _statusCache[o.number] = {status: o.status, lbl: lbl, date: o.date};
+    localStorage.setItem('qm_order_status', JSON.stringify(_statusCache));
+    // Make sure this order is in history
+    if (o.number && !_cached.includes(o.number)) { _cached.unshift(o.number); localStorage.setItem(_OK, JSON.stringify(_cached)); }
+  } catch(e) {}
   var cls=STAT_CSS[o.status]||'sp';
   var curIdx=STAT_STEPS.findIndex(function(s){return s.key===o.status;});
   var tl=(o.timeline||[]).slice().reverse();

@@ -102,6 +102,9 @@ function syncPortal(uid) {
     showInDirectory: s.showInDirectory||false,
     description: s.businessDescription||'',
     category: s.businessCategory||'Retail',
+    openTime: s.openTime||'08:00',
+    closeTime: s.closeTime||'20:00',
+    branch: s.businessBranch||'',
     updatedAt: new Date().toISOString(),
     items: (State.db.items || [])
       .filter(function(i){ return i.unitPrice > 0; })
@@ -123,7 +126,7 @@ function starterDb(businessName, email) {
       quoteValidity:14, paymentTerms:'Payment due within 14 days.',
       bankDetails:'', quoteFooter:'', invoiceFooter:'', senderName:businessName||'',
       senderEmail:email||'', posToken:'', orderToken:'',
-      showInDirectory:false, businessDescription:'', businessCategory:'Retail', uoms:['pc','kg','g','L','mL','m','box','bag','pair'],
+      showInDirectory:false, businessDescription:'', businessCategory:'Retail', openTime:'08:00', closeTime:'20:00', businessBranch:'', uoms:['pc','kg','g','L','mL','m','box','bag','pair'],
       zakatNisabStd:'silver', zakatSilverPrice:32.82, zakatGoldPrice:440 },
     counters:{ quote:1, invoice:1, delivery:1, pos:1 },
     items:[], customers:[], quotations:[], invoices:[], deliveries:[],
@@ -735,7 +738,9 @@ function openItemEditor(id){
       const rec={id:id||uid(),name,sku:val('i_sku'),barcode:val('i_barcode'),unit:val('i_unit')||'pc',desc:val('i_desc'),
         image:window._itemImgDataUrl||(it&&it.image)||null,
         costPrice:+val('i_cost')||0,unitPrice:sell,taxable:val('i_tax')==='1',
-        trackStock,stockQty:newStockQty,reorderLevel:trackStock?+val('i_reord')||0:0,reorderQty:trackStock?+val('i_reordqty')||0:0};
+        trackStock,
+        stockQty: id ? oldStockQty : 0,
+        reorderLevel:trackStock?+val('i_reord')||0:0,reorderQty:trackStock?+val('i_reordqty')||0:0};
       if(id){const ix=State.db.items.findIndex(i=>i.id===id);State.db.items[ix]=rec;}else State.db.items.push(rec);
       // Auto-create movement record when stock qty changes
       if(trackStock){
@@ -1474,28 +1479,35 @@ function viewSettings(){
         <div class="field"><label>POS receipt prefix</label><input id="s_pos" value="${esc(s.posPrefix||'TXN-')}"></div>
       </div>
 
-      <div class="card pad" style="grid-column:1/-1;border-left:3px solid var(--accent)">
-        <h3 style="margin-bottom:14px">&#127758; Public Business Directory</h3>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px">
-          <div>
-            <div style="font-weight:600">Show in QuoteMaster directory</div>
-            <div class="muted" style="font-size:12.5px;margin-top:3px">Allow customers to find and order from your business on the public marketplace</div>
-          </div>
-          <select id="s_dir" style="border:1px solid var(--line);border-radius:9px;padding:8px 12px;flex-shrink:0">
-            <option value="1" \${s.showInDirectory?'selected':''}>Yes — show in directory</option>
-            <option value="0" \${!s.showInDirectory?'selected':''}>No — keep private</option>
-          </select>
-        </div>
-        <div class="fgrid">
-          <div class="field"><label>Business category</label>
-            <select id="s_cat" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px">
-              \${['Retail','Restaurant & Food','Grocery','Electronics','Fashion & Clothing','Services','Healthcare','Education','Travel & Tourism','Other'].map(c=>\`<option value="\${esc(c)}" \${s.businessCategory===c?'selected':''}>\${esc(c)}</option>\`).join('')}
-            </select></div>
-          <div class="field"><label>Short description (shown in directory)</label>
-            <textarea id="s_desc" rows="2" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;resize:vertical" placeholder="e.g. Fresh local produce and groceries">\${esc(s.businessDescription||'')}</textarea></div>
-        </div>
-      </div>
-      <div style="margin-top:16px"><button class="btn accent" onclick="saveSettings()">Save all settings</button></div>
+      ${(function(){
+  const cats=['Retail','Restaurant & Food','Grocery','Electronics','Fashion & Clothing','Services','Healthcare','Education','Travel & Tourism','Other'];
+  const catOpts=cats.map(c=>'<option value="'+esc(c)+'"'+(s.businessCategory===c?' selected':'')+'>'+esc(c)+'</option>').join('');
+  return '<div class="card pad" style="grid-column:1/-1;border-left:3px solid var(--accent)">'+
+    '<h3 style="margin-bottom:14px">&#127758; Public Business Directory</h3>'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px">'+
+      '<div><div style="font-weight:600">Show in QuoteMaster directory</div>'+
+      '<div class="muted" style="font-size:12.5px;margin-top:3px">Allow customers to find and order from your business</div></div>'+
+      '<select id="s_dir" style="border:1px solid var(--line);border-radius:9px;padding:8px 12px;flex-shrink:0">'+
+        '<option value="1"'+(s.showInDirectory?' selected':'')+'>Yes — show in directory</option>'+
+        '<option value="0"'+(!s.showInDirectory?' selected':'')+'>No — keep private</option>'+
+      '</select></div>'+
+    '<div class="fgrid">'+
+      '<div class="field"><label>Business category</label>'+
+        '<select id="s_cat" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px">'+catOpts+'</select></div>'+
+      '<div class="field"><label>Short description (shown in directory)</label>'+
+        '<textarea id="s_desc" rows="2" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;resize:vertical">'+esc(s.businessDescription||'')+'</textarea></div>'+
+    '</div>'+
+    '<div class="fgrid" style="margin-top:12px">'+
+      '<div class="field"><label>&#128336; Opening time</label>'+
+        '<input id="s_open" type="time" value="'+(s.openTime||'08:00')+'" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px"></div>'+
+      '<div class="field"><label>&#128336; Closing time</label>'+
+        '<input id="s_close" type="time" value="'+(s.closeTime||'20:00')+'" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px"></div>'+
+    '</div>'+
+    '<div class="field" style="margin-top:12px"><label>Branch / location</label>'+
+      '<input id="s_branch" value="'+esc(s.businessBranch||'')+'" placeholder="e.g. Male City, Hulhumale, Addu City" style="width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px"></div>'+
+  '</div>';
+})()}
+<div style="margin-top:16px"><button class="btn accent" onclick="saveSettings()">Save all settings</button></div>
     </div>
    </div>`;
   document.getElementById('logoFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{State.db.settings.logo=r.result;document.getElementById('logoPrev').innerHTML=`<img src="${r.result}">`;persist();refreshChrome();};r.readAsDataURL(f);};
@@ -3732,46 +3744,92 @@ function _orderStatusColor(s){
 }
 
 /* --- confirmOrder modal (called from row button) ---------------------- */
+// Editable line items stored for the current confirm modal
+var _cfItems = [];
+var _cfOrderId = '';
+
 function confirmOrder(orderId) {
   var o = _customerOrders.find(function(x){ return x.id===orderId; });
   if (!o) { toast('Order not found in cache'); return; }
-  var iRows = (o.lineItems||[]).map(function(li){
-    return '<tr><td>'+esc(li.name)+'</td><td style="text-align:center">'+li.qty+'</td>'+
-      '<td style="text-align:right;font-family:monospace">'+money(li.unitPrice)+'</td>'+
-      '<td style="text-align:right;font-family:monospace;font-weight:600">'+money(li.amount)+'</td></tr>';
+  _cfItems = JSON.parse(JSON.stringify(o.lineItems||[])); // deep copy — editable
+  _cfOrderId = orderId;
+  _renderConfirmModal(o);
+}
+
+function _renderConfirmModal(o) {
+  var iRows = _cfItems.map(function(li, ix) {
+    return '<tr>' +
+      '<td>'+esc(li.name)+'</td>' +
+      '<td style="text-align:center;width:90px">' +
+        '<div style="display:flex;align-items:center;gap:4px;justify-content:center">' +
+          '<button onclick="_cfQty('+ix+',-1)" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--line);background:var(--paper);cursor:pointer;font-size:14px;font-weight:700">&#8722;</button>' +
+          '<span id="cfq_'+ix+'" style="font-weight:700;min-width:24px;text-align:center">'+li.qty+'</span>' +
+          '<button onclick="_cfQty('+ix+',1)" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--line);background:var(--paper);cursor:pointer;font-size:14px;font-weight:700">&#43;</button>' +
+        '</div></td>' +
+      '<td style="text-align:right;font-family:monospace">'+money(li.unitPrice)+'</td>' +
+      '<td style="text-align:right;font-family:monospace;font-weight:600" id="cfa_'+ix+'">'+money(li.amount)+'</td>' +
+      '<td><button onclick="_cfRemove('+ix+')" style="background:transparent;color:var(--danger);border:none;cursor:pointer;font-size:16px;padding:2px 6px">&#10005;</button></td>' +
+    '</tr>';
   }).join('');
-  openModal('Confirm Order #'+esc(o.number||o.id.slice(-6)),
+  var total = _cfItems.reduce(function(s,li){ return s+li.amount; },0);
+  var body =
     '<div style="background:var(--amber-soft);border:1.5px solid var(--amber);border-radius:11px;' +
       'padding:12px 14px;margin-bottom:14px;font-size:13.5px">' +
-      '<b>Review before confirming.</b> Once confirmed, the customer will be asked to pay.</div>' +
+      '<b>Review &amp; adjust before confirming.</b> You can edit quantities or remove items.</div>' +
     '<div class="fgrid">' +
-      '<div class="field"><label>Customer</label><div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:13.5px">' +
-        '<b>'+esc(o.customer&&o.customer.name)+'</b><br>' +
-        esc(o.customer&&o.customer.phone||'')+'<br>' +
-        esc(o.customer&&o.customer.email||'')+'<br>' +
-        '<span class="muted">'+esc(o.customer&&o.customer.address||'')+'</span></div></div>' +
+      '<div class="field"><label>Customer</label>' +
+        '<div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:13.5px">' +
+          '<b>'+esc(o.customer&&o.customer.name)+'</b><br>' +
+          esc(o.customer&&o.customer.phone||'')+'<br>' +
+          esc(o.customer&&o.customer.email||'')+'<br>' +
+          '<span class="muted">'+esc(o.customer&&o.customer.address||'')+'</span></div></div>' +
       '<div class="field"><label>Customer notes</label>' +
         '<div style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;min-height:48px;font-size:13.5px">'+esc(o.notes||'—')+'</div></div>' +
     '</div>' +
     '<div class="tbl" style="margin:12px 0"><table>' +
-      '<thead><tr><th>Item</th><th>Qty</th><th class="right">Unit price</th><th class="right">Amount</th></tr></thead>' +
-      '<tbody>'+iRows+'</tbody>' +
+      '<thead><tr><th>Item</th><th style="text-align:center">Qty</th><th class="right">Unit</th><th class="right">Amount</th><th></th></tr></thead>' +
+      '<tbody id="cf_tbody">'+iRows+'</tbody>' +
       '<tfoot><tr>' +
         '<td colspan="3" style="text-align:right;font-weight:700;padding:8px 0">Total</td>' +
-        '<td style="text-align:right;font-weight:700;padding:8px 0;font-family:monospace">'+money(o.totals&&o.totals.total)+'</td>' +
+        '<td style="text-align:right;font-weight:700;padding:8px 0;font-family:monospace" id="cf_total">'+money(total)+'</td><td></td>' +
       '</tr></tfoot></table></div>' +
     '<div class="field"><label>Message to customer (optional)</label>' +
-      '<input id="cf_note" placeholder="Your order is confirmed! Please proceed with payment."></div>',
+      '<input id="cf_note" placeholder="Your order is confirmed! Please proceed with payment."></div>';
+  openModal('Confirm Order #'+esc(o.number||o.id.slice(-6)), body,
     [{label:'Cancel',cls:'ghost',fn:closeModal},
-     {label:'Confirm & request payment',cls:'accent',fn:function(){
+     {label:'Confirm &amp; request payment',cls:'accent',fn:function(){
        var note=(document.getElementById('cf_note')||{}).value||'Order confirmed. Please proceed with payment.';
+       var newTotal=_cfItems.reduce(function(s,li){return s+li.amount;},0);
+       var rate=(State.db.settings.taxRate||0)/100;
+       var newTotals={subtotal:+newTotal.toFixed(2),tax:+(newTotal*rate).toFixed(2),total:+(newTotal*(1+rate)).toFixed(2)};
        var entry={status:'confirmed',date:todayISO(),
          time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),note:note};
-       _fdb.collection('businesses').doc(State.user.uid).collection('customerOrders').doc(orderId)
-         .update({status:'confirmed',timeline:firebase.firestore.FieldValue.arrayUnion(entry)})
+       _fdb.collection('businesses').doc(State.user.uid).collection('customerOrders').doc(_cfOrderId)
+         .update({status:'confirmed',lineItems:_cfItems,totals:newTotals,
+           timeline:firebase.firestore.FieldValue.arrayUnion(entry)})
          .then(function(){ closeModal(); toast('Confirmed — customer can now pay'); viewCustomerOrders(); })
          .catch(function(e){ toast('Error: '+e.message); });
      }}],'lg');
+}
+
+function _cfQty(ix, delta) {
+  if(!_cfItems[ix]) return;
+  _cfItems[ix].qty = Math.max(1, _cfItems[ix].qty + delta);
+  _cfItems[ix].amount = +(_cfItems[ix].qty * _cfItems[ix].unitPrice).toFixed(2);
+  var qEl=document.getElementById('cfq_'+ix), aEl=document.getElementById('cfa_'+ix);
+  if(qEl) qEl.textContent=_cfItems[ix].qty;
+  if(aEl) aEl.textContent=money(_cfItems[ix].amount);
+  _cfUpdateTotal();
+}
+function _cfRemove(ix) {
+  _cfItems.splice(ix,1);
+  var o=_customerOrders.find(function(x){return x.id===_cfOrderId;});
+  if(o)_renderConfirmModal(o);
+}
+function _cfUpdateTotal() {
+  var total=_cfItems.reduce(function(s,li){return s+li.amount;},0);
+  var el=document.getElementById('cf_total');
+  if(el)el.textContent=money(total);
 }
 
 /* --- viewCustomerOrders: fetch then render ---------------------------- */
