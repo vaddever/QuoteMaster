@@ -8,63 +8,170 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
-:root{--accent:#0f6d5a;--accent-soft:#e3f0ea;--accent-ink:#0b4a3c;--ink:#1b1d24;--ink-soft:#5b5d68;
-  --line:#e4ded2;--paper:#f6f3ec;--card:#fffdf8;--danger:#b3261e}
+:root{--accent:#0f6d5a;--accent-soft:#e3f0ea;--accent-ink:#0b4a3c;--ink:#1b1d24;
+  --ink-soft:#5b5d68;--line:#e4ded2;--paper:#f6f3ec;--card:#fffdf8}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Hanken Grotesk',system-ui,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased}
-button{font-family:inherit;cursor:pointer;border:none}
-input,select{font-family:inherit;font-size:15px;color:var(--ink);outline:none}
-/* Hero */
-.hero{background:linear-gradient(135deg,#0b4a3c,#1a7a65);color:#fff;padding:50px 20px 60px;text-align:center}
-.hero h1{font-size:clamp(26px,5vw,46px);font-weight:800;margin-bottom:10px}
-.hero p{font-size:clamp(14px,2vw,18px);opacity:.85;margin-bottom:28px;max-width:520px;margin-inline:auto}
+body{font-family:'Hanken Grotesk',system-ui,sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
+button,input,select{font-family:inherit;cursor:pointer;outline:none}
+
+/* ── Desktop hero ──────────────────────────────────────────────────────── */
+.hero{background:linear-gradient(135deg,#0b4a3c,#1a7a65);color:#fff;padding:48px 20px 56px;text-align:center}
+.hero h1{font-size:clamp(24px,5vw,42px);font-weight:800;margin-bottom:10px}
+.hero p{font-size:16px;opacity:.85;margin-bottom:24px;max-width:480px;margin-inline:auto}
 .hero-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.hero-btns a,.hero-btns button{padding:12px 24px;border-radius:11px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
+.hero-btns a{padding:12px 24px;border-radius:11px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;white-space:nowrap}
 .btn-primary{background:#fff;color:var(--accent-ink)}
 .btn-outline{background:transparent;border:2px solid rgba(255,255,255,.6);color:#fff}
-.btn-outline:hover{background:rgba(255,255,255,.1)}
-/* Search */
-.search-bar{max-width:720px;margin:-24px auto 0;background:var(--card);border-radius:14px;padding:16px;display:grid;grid-template-columns:1fr auto auto;gap:10px;box-shadow:0 4px 24px rgba(0,0,0,.12);position:relative;z-index:10}
-@media(max-width:600px){.search-bar{grid-template-columns:1fr;margin:12px 14px 0}}
-.search-bar input{padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;width:100%;font-size:15px}
-.search-bar select{padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--paper)}
-.search-bar button{padding:10px 20px;background:var(--accent);color:#fff;border-radius:10px;font-size:14px;font-weight:700;white-space:nowrap}
-/* Main content */
-.container{max-width:1200px;margin:0 auto;padding:30px 20px}
-.section-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+
+/* ── Mobile sticky header (hidden on desktop) ──────────────────────────── */
+.mob-header{display:none}
+
+/* ── Search bar ─────────────────────────────────────────────────────────── */
+.search-wrap{max-width:720px;margin:-24px auto 0;background:var(--card);border-radius:14px;
+  padding:14px;display:grid;grid-template-columns:1fr auto auto;gap:8px;
+  box-shadow:0 4px 24px rgba(0,0,0,.12);position:relative;z-index:10}
+.search-wrap input{padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;color:var(--ink)}
+.search-wrap select{padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink)}
+.search-wrap button{padding:10px 18px;background:var(--accent);color:#fff;border-radius:10px;font-size:14px;font-weight:700;border:none;white-space:nowrap}
+
+/* ── Main content ────────────────────────────────────────────────────────── */
+.container{max-width:1200px;margin:0 auto;padding:28px 18px}
+.section-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
 .section-hd h2{font-size:20px;font-weight:700}
-.count-badge{font-size:13px;color:var(--ink-soft)}
-/* Business grid */
+.count{font-size:13px;color:var(--ink-soft)}
+
+/* ── Category pills ──────────────────────────────────────────────────────── */
+.cat-pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.cat-pill{padding:6px 16px;border-radius:20px;border:1.5px solid var(--line);background:var(--card);
+  font-size:13px;font-weight:600;cursor:pointer;color:var(--ink-soft);border:none;transition:.12s}
+.cat-pill.active{background:var(--accent-soft);color:var(--accent-ink);border:1.5px solid var(--accent)}
+
+/* ── Business grid (desktop) ────────────────────────────────────────────── */
 .biz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
-@media(max-width:480px){.biz-grid{grid-template-columns:1fr}}
-.biz-card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;overflow:hidden;transition:.15s;cursor:pointer;text-decoration:none;color:inherit;display:flex;flex-direction:column}
-.biz-card:hover{transform:translateY(-3px);box-shadow:0 8px 28px rgba(0,0,0,.1);border-color:var(--accent)}
-.biz-banner{height:100px;background:linear-gradient(135deg,#0b4a3c,#1a7a65);display:grid;place-items:center;position:relative}
-.biz-logo{width:64px;height:64px;border-radius:14px;background:#fff;display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--accent-ink);overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.15);border:3px solid #fff}
+
+/* ── Business card ───────────────────────────────────────────────────────── */
+.biz-card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;
+  overflow:hidden;transition:.15s;cursor:pointer;text-decoration:none;color:inherit;display:flex;flex-direction:column}
+.biz-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.1);border-color:var(--accent)}
+.biz-banner{height:96px;background:linear-gradient(135deg,#0b4a3c,#1a7a65);
+  display:grid;place-items:center;position:relative}
+.biz-logo{width:60px;height:60px;border-radius:13px;background:#fff;display:grid;place-items:center;
+  font-size:24px;font-weight:800;color:var(--accent-ink);overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.15);border:2px solid #fff}
 .biz-logo img{width:100%;height:100%;object-fit:cover;border-radius:11px}
-.biz-cat-chip{position:absolute;top:10px;right:10px;background:rgba(255,255,255,.2);color:#fff;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:20px}
-.biz-body{padding:14px}
-.biz-name{font-size:17px;font-weight:700;margin-bottom:4px}
-.biz-desc{font-size:13.5px;color:var(--ink-soft);margin-bottom:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:40px}
-.order-btn{display:block;width:100%;padding:12px;background:var(--accent);color:#fff;border-radius:11px;font-size:14.5px;font-weight:700;text-align:center;text-decoration:none;transition:.12s;margin-top:auto}
+.biz-cat-chip{position:absolute;top:8px;right:8px;background:rgba(255,255,255,.2);color:#fff;
+  font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:20px}
+.biz-body{padding:13px}
+.biz-name{font-size:16px;font-weight:700;margin-bottom:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.biz-hours{font-size:11.5px;color:var(--ink-soft);margin-bottom:8px}
+.biz-desc{font-size:13px;color:var(--ink-soft);margin-bottom:12px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:36px}
+.open-badge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px}
+.open-yes{background:#d1fae5;color:#065f46}
+.open-no{background:#fee2e2;color:#991b1b}
+.order-btn{display:block;width:100%;padding:11px;background:var(--accent);color:#fff;border-radius:11px;
+  font-size:14px;font-weight:700;text-align:center;text-decoration:none;transition:.12s;border:none;margin-top:auto}
 .order-btn:hover{background:var(--accent-ink)}
-/* Category filter pills */
-.cat-pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
-.cat-pill{padding:6px 16px;border-radius:20px;border:1.5px solid var(--line);background:var(--card);font-size:13px;font-weight:600;cursor:pointer;transition:.12s;color:var(--ink-soft)}
-.cat-pill.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
-/* Loading / empty */
-.spin{width:32px;height:32px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:40px auto}
+
+/* ── Empty / loading ────────────────────────────────────────────────────── */
+.spin{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .8s linear infinite;margin:40px auto}
 @keyframes spin{to{transform:rotate(360deg)}}
-.empty{text-align:center;padding:50px 20px;color:var(--ink-soft)}
-.empty h3{font-size:20px;margin-bottom:8px;color:var(--ink)}
-/* Footer */
-footer{background:#13241f;color:#9fc0b6;text-align:center;padding:30px 20px;margin-top:60px;font-size:13.5px}
+.empty{text-align:center;padding:40px 20px;color:var(--ink-soft)}
+.empty h3{font-size:18px;margin-bottom:6px;color:var(--ink)}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+footer{background:#13241f;color:#9fc0b6;text-align:center;padding:28px 20px;margin-top:50px;font-size:13px}
 footer a{color:var(--accent-soft);text-decoration:none}
-footer .biz-link{display:inline-block;margin-top:12px;padding:10px 24px;background:var(--accent);color:#fff;border-radius:10px;font-weight:700;text-decoration:none;font-size:14px}
+.biz-login-btn{display:inline-block;margin-top:10px;padding:10px 22px;background:var(--accent);
+  color:#fff;border-radius:10px;font-weight:700;text-decoration:none;font-size:14px}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MOBILE — show businesses as fast as possible, hide everything else
+   Applies at 768px and below (covers all phones + small tablets)
+   ══════════════════════════════════════════════════════════════════════════ */
+@media(max-width:768px){
+
+  /* 1 — Nuke the desktop hero entirely */
+  .hero { display:none }
+
+  /* 2 — Show the slim sticky mobile header */
+  .mob-header {
+    display:flex; align-items:center; gap:8px;
+    background:var(--accent); color:#fff;
+    padding:0 12px; height:46px;
+    position:sticky; top:0; z-index:60;
+    box-shadow:0 2px 8px rgba(0,0,0,.2);
+  }
+  .mob-header .mh-brand { font-weight:800; font-size:15px; flex:1 }
+  .mob-header a {
+    padding:6px 12px; border-radius:8px; font-size:12.5px; font-weight:700;
+    text-decoration:none; white-space:nowrap; line-height:1;
+  }
+  .mob-header .mh-login   { background:rgba(255,255,255,.18); color:#fff }
+  .mob-header .mh-register{ background:rgba(255,255,255,.08); color:rgba(255,255,255,.8);
+                             border:1px solid rgba(255,255,255,.3) }
+
+  /* 3 — Search bar: flush, single row (input + button only) */
+  .search-wrap {
+    margin:0; border-radius:0; padding:6px 10px;
+    box-shadow:none; border-bottom:1px solid var(--line);
+    background:var(--card);
+    grid-template-columns:1fr auto; gap:6px;
+  }
+  .search-wrap select  { display:none }          /* use pill tabs instead */
+  .search-wrap input   { padding:8px 10px; font-size:14px; border-radius:8px }
+  .search-wrap button  { padding:8px 14px; font-size:13px; border-radius:8px }
+
+  /* 4 — Category pills: horizontal scroll strip, no wrap */
+  .cat-pills {
+    flex-wrap:nowrap; overflow-x:auto; gap:6px;
+    padding:6px 10px; margin-bottom:0;
+    background:var(--card);
+    border-bottom:1px solid var(--line);
+    scrollbar-width:none;
+  }
+  .cat-pills::-webkit-scrollbar { display:none }
+  .cat-pill { flex-shrink:0; padding:4px 12px; font-size:12px; border-radius:20px }
+
+  /* 5 — Container: zero top padding, tight sides */
+  .container { padding:8px 8px 20px }
+
+  /* 6 — Hide "Businesses / N businesses" header row (not needed on mobile) */
+  .section-hd { display:none }
+
+  /* 7 — Business grid: 2 compact columns */
+  .biz-grid { grid-template-columns:1fr 1fr; gap:8px }
+
+  /* 8 — Compact business card */
+  .biz-banner  { height:58px }
+  .biz-logo    { width:42px; height:42px; font-size:17px; border-radius:9px; border-width:2px }
+  .biz-cat-chip{ font-size:9.5px; padding:2px 7px; top:5px; right:5px; border-radius:12px }
+  .biz-body    { padding:8px }
+  .biz-name    { font-size:13px; font-weight:700; gap:3px; margin-bottom:2px; flex-wrap:wrap }
+  .open-badge  { font-size:10px; padding:1px 7px }
+  .biz-hours   { font-size:10.5px; line-height:1.4; margin-bottom:5px }
+  .biz-desc    { font-size:11.5px; -webkit-line-clamp:1; min-height:0; margin-bottom:8px }
+  .order-btn   { padding:8px 4px; font-size:12.5px; border-radius:8px }
+
+  footer { margin-top:20px; padding:16px 12px }
+}
+
+/* Very narrow (< 340px): single column */
+@media(max-width:339px){
+  .biz-grid { grid-template-columns:1fr }
+}
 </style>
 </head>
 <body>
 
+<!-- Mobile slim header (hidden on desktop) -->
+<div class="mob-header">
+  <div class="mh-brand">&#128722; QuoteMaster</div>
+  <a href="portal.html#register" class="mh-register">Register</a>
+  <a href="portal.html" class="mh-login">&#128274; Login</a>
+</div>
+
+<!-- Desktop hero (hidden on mobile) -->
 <div class="hero">
   <h1>&#128722; Find &amp; Order Local</h1>
   <p>Browse businesses and order directly — simple, fast, and trackable</p>
@@ -74,40 +181,41 @@ footer .biz-link{display:inline-block;margin-top:12px;padding:10px 24px;backgrou
   </div>
 </div>
 
-<div class="search-bar">
-  <input id="searchQ" placeholder="&#128269; Search businesses…" oninput="filterBiz()">
+<!-- Search bar -->
+<div class="search-wrap">
+  <input id="searchQ" placeholder="&#128269; Search…" id="searchQ" oninput="filterBiz()" oninput="filterBiz()">
   <select id="catFilter" onchange="filterBiz()">
     <option value="">All categories</option>
-    <option>Retail</option>
-    <option>Restaurant &amp; Food</option>
-    <option>Grocery</option>
-    <option>Electronics</option>
-    <option>Fashion &amp; Clothing</option>
-    <option>Services</option>
-    <option>Healthcare</option>
-    <option>Education</option>
-    <option>Travel &amp; Tourism</option>
-    <option>Other</option>
+    <option>Retail</option><option>Restaurant &amp; Food</option>
+    <option>Grocery</option><option>Electronics</option>
+    <option>Fashion &amp; Clothing</option><option>Services</option>
+    <option>Healthcare</option><option>Education</option>
+    <option>Travel &amp; Tourism</option><option>Other</option>
   </select>
   <button onclick="filterBiz()">Search</button>
 </div>
 
 <div class="container">
+  <!-- Category pills -->
   <div id="catPills" class="cat-pills"></div>
+
+  <!-- Results header -->
   <div class="section-hd">
     <h2>Businesses</h2>
-    <span class="count-badge" id="bizCount"></span>
+    <span class="count" id="bizCount"></span>
   </div>
+
+  <!-- Business grid -->
   <div id="bizGrid"><div class="spin"></div></div>
 </div>
 
 <footer>
-  <div>Powered by <strong>QuoteMaster</strong> &mdash; business management for the Maldives</div>
-  <a class="biz-link" href="portal.html">&#128274; Business Portal Login</a>
+  <div>Powered by <strong>QuoteMaster</strong> — business management for the Maldives</div>
+  <a class="biz-login-btn" href="portal.html">&#128274; Business Portal Login</a>
 </footer>
 
 <script>
-const FIREBASE_CONFIG = {
+const FIREBASE_CONFIG={
   apiKey:"AIzaSyD5NPIUGMbs8qQfU-PekQMMT2EWDzNBj-4",
   authDomain:"quote-master-eed65.firebaseapp.com",
   projectId:"quote-master-eed65",
@@ -117,52 +225,54 @@ const FIREBASE_CONFIG = {
 };
 firebase.initializeApp(FIREBASE_CONFIG);
 var fdb=firebase.firestore();
-
 var _allBiz=[], _selectedCat='';
 
 function esc(s){return String(s||'').replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 
-function getPortalBase(){
-  var base=location.href.split('?')[0];
-  // Strip index.html from base to get directory
-  return base.replace(/index\.html$/,'');
+function _isOpen(openTime,closeTime,openDays){
+  var now=new Date(),h=now.getHours(),m=now.getMinutes();
+  var days=['sun','mon','tue','wed','thu','fri','sat'];
+  var today=days[now.getDay()];
+  if(openDays&&openDays.length&&!openDays.includes(today))return false;
+  if(!openTime||!closeTime)return null;
+  try{
+    var nowM=h*60+m;
+    var o=openTime.split(':'),c=closeTime.split(':');
+    var oM=+o[0]*60+(+o[1]),cM=+c[0]*60+(+c[1]);
+    return cM<oM?(nowM>=oM||nowM<cM):(nowM>=oM&&nowM<cM);
+  }catch(e){return null;}
 }
+function _fmtT(t){
+  if(!t)return'';
+  try{var p=t.split(':'),h=+p[0],m=p[1];return(h===0?12:h>12?h-12:h)+':'+m+(h<12?' AM':' PM');}catch(e){return t;}
+}
+var dayLabels={mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri',sat:'Sat',sun:'Sun'};
 
-// Load all businesses with showInDirectory = true
+function getBase(){return location.href.split('?')[0].replace(/index\.html$/,'');}
+
+/* Load businesses */
 (async function(){
   try{
     var snap=await fdb.collection('portals').where('showInDirectory','==',true).get();
-    _allBiz=snap.docs.map(function(d){
-      var data=d.data();
-      return Object.assign({token:d.id},data);
-    });
-    // Client-side: also fetch without filter in case index isn't ready
-    // If no results from indexed query, try unfiltered (handles first-time sync or missing field)
+    _allBiz=snap.docs.map(function(d){return Object.assign({token:d.id},d.data());});
     if(!_allBiz.length){
-      var snap2=await fdb.collection('portals').limit(50).get();
-      _allBiz=snap2.docs.map(function(d){
-        var data=d.data();
-        // Show businesses that haven't explicitly set showInDirectory to false
-        if(data.showInDirectory===false)return null;
-        return Object.assign({token:d.id},data);
-      }).filter(Boolean);
+      var s2=await fdb.collection('portals').limit(50).get();
+      _allBiz=s2.docs.map(function(d){var dat=d.data();if(dat.showInDirectory===false)return null;return Object.assign({token:d.id},dat);}).filter(Boolean);
     }
-    renderCatPills();
-    renderGrid(_allBiz);
+    buildPills();renderGrid(_allBiz);
   }catch(e){
-    document.getElementById('bizGrid').innerHTML='<div class="empty"><h3>Could not load businesses</h3><p>'+esc(e.message)+'</p></div>';
+    document.getElementById('bizGrid').innerHTML='<div class="empty"><h3>Could not load</h3><p>'+esc(e.message)+'</p></div>';
   }
 })();
 
-function renderCatPills(){
+function buildPills(){
   var cats={};
-  _allBiz.forEach(function(b){ if(b.category)cats[b.category]=(cats[b.category]||0)+1; });
-  var pills=Object.keys(cats).sort();
-  document.getElementById('catPills').innerHTML=
-    '<button class="cat-pill active" onclick="setCat(\'\',this)">All ('+_allBiz.length+')</button>'+
-    pills.map(function(c){
-      return '<button class="cat-pill" onclick="setCat(\''+esc(c)+'\',this)">'+esc(c)+' ('+cats[c]+')</button>';
-    }).join('');
+  _allBiz.forEach(function(b){if(b.category)cats[b.category]=(cats[b.category]||0)+1;});
+  var html='<button class="cat-pill active" onclick="setCat(\'\',this)">All ('+_allBiz.length+')</button>';
+  Object.keys(cats).sort().forEach(function(c){
+    html+='<button class="cat-pill" onclick="setCat(\''+esc(c)+'\',this)">'+esc(c)+' ('+cats[c]+')</button>';
+  });
+  document.getElementById('catPills').innerHTML=html;
 }
 
 function setCat(cat,btn){
@@ -174,79 +284,46 @@ function setCat(cat,btn){
 }
 
 function filterBiz(){
-  var q=document.getElementById('searchQ').value.toLowerCase();
-  var cat=document.getElementById('catFilter').value;
-  _selectedCat=cat;
-  var filtered=_allBiz.filter(function(b){
-    var matchQ=!q||(b.businessName||'').toLowerCase().includes(q)||
-      (b.description||'').toLowerCase().includes(q)||(b.category||'').toLowerCase().includes(q);
-    var matchCat=!cat||b.category===cat;
-    return matchQ&&matchCat;
+  var q=(document.getElementById('searchQ').value||'').toLowerCase();
+  var cat=document.getElementById('catFilter').value;_selectedCat=cat;
+  var f=_allBiz.filter(function(b){
+    var mq=!q||(b.businessName||'').toLowerCase().includes(q)||(b.description||'').toLowerCase().includes(q)||(b.category||'').toLowerCase().includes(q);
+    var mc=!cat||b.category===cat;
+    return mq&&mc;
   });
-  renderGrid(filtered);
+  renderGrid(f);
 }
 
-function _isOpen(openTime, closeTime) {
-  if (!openTime || !closeTime) return null; // not set
-  try {
-    var now = new Date();
-    var h = now.getHours(), m = now.getMinutes();
-    var nowMins = h*60+m;
-    var o = openTime.split(':'), c = closeTime.split(':');
-    var openMins = +o[0]*60 + +o[1];
-    var closeMins = +c[0]*60 + +c[1];
-    if (closeMins < openMins) { // overnight
-      return nowMins >= openMins || nowMins < closeMins;
-    }
-    return nowMins >= openMins && nowMins < closeMins;
-  } catch(e) { return null; }
-}
-
-function _fmtTime(t) {
-  if (!t) return '';
-  try {
-    var p = t.split(':');
-    var h = +p[0], m = p[1];
-    return (h===0?12:h>12?h-12:h) + ':' + m + (h<12?' AM':' PM');
-  } catch(e) { return t; }
-}
+var GRAD_COLORS=['#0b4a3c,#1a7a65','#1e3a8a,#2563eb','#7c2d12,#c2410c','#4c1d95,#7c3aed','#14532d,#16a34a'];
 
 function renderGrid(businesses){
-  var base=getPortalBase();
+  var base=getBase();
   var grid=document.getElementById('bizGrid');
   var count=document.getElementById('bizCount');
   if(!businesses.length){
-    grid.innerHTML='<div class="empty"><h3>No businesses found</h3><p>Try a different search or category.</p></div>';
-    count.textContent='';
-    return;
+    grid.innerHTML='<div class="empty"><h3>No businesses found</h3><p>Try a different search.</p></div>';
+    count.textContent='';return;
   }
   count.textContent=businesses.length+' business'+(businesses.length===1?'':'es');
   grid.innerHTML=businesses.map(function(b){
-    var logoHtml=b.logo
-      ?'<img src="'+esc(b.logo)+'">'
-      :'<span>'+esc((b.businessName||'?')[0].toUpperCase())+'</span>';
-    // Auto-pick a gradient colour from business name
-    var colors=['#0b4a3c,#1a7a65','#1e3a8a,#2563eb','#7c2d12,#c2410c','#4c1d95,#7c3aed','#14532d,#16a34a'];
-    var ci=((b.businessName||'').charCodeAt(0)||0)%colors.length;
-    var open = _isOpen(b.openTime, b.closeTime);
-    var openBadge = open===null ? '' :
-      open ? '<span style="background:#d1fae5;color:#065f46;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-left:6px">Open</span>' :
-             '<span style="background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-left:6px">Closed</span>';
-    var dayNames={mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri',sat:'Sat',sun:'Sun'};
-    var daysText=b.openDays&&b.openDays.length?b.openDays.map(function(d){return dayNames[d]||d;}).join(' · '):'';
-    var hoursText = (b.openTime && b.closeTime) ?
-      '<div style="font-size:12px;color:var(--ink-soft);margin-top:3px">&#128336; ' + _fmtTime(b.openTime) + ' – ' + _fmtTime(b.closeTime) +
-      (daysText?' &nbsp;&middot;&nbsp; '+esc(daysText):'') +
-      (b.branch?' &nbsp;&middot;&nbsp; '+esc(b.branch):'') + '</div>' : '';
+    var open=_isOpen(b.openTime,b.closeTime,b.openDays);
+    var badge=open===null?'':open
+      ?'<span class="open-badge open-yes">Open</span>'
+      :'<span class="open-badge open-no">Closed</span>';
+    var daysStr=(b.openDays||[]).map(function(d){return dayLabels[d]||d;}).join(' · ');
+    var hours=(b.openTime&&b.closeTime)
+      ?'<div class="biz-hours">&#128336; '+_fmtT(b.openTime)+' – '+_fmtT(b.closeTime)+(daysStr?' &middot; '+esc(daysStr):'')+'</div>':'';
+    var logoHtml=b.logo?'<img src="'+esc(b.logo)+'">':'<span>'+esc((b.businessName||'?')[0].toUpperCase())+'</span>';
+    var ci=((b.businessName||'').charCodeAt(0)||0)%GRAD_COLORS.length;
     return '<a class="biz-card" href="'+esc(base+'order.html?b='+b.token)+'">'+
-      '<div class="biz-banner" style="background:linear-gradient(135deg,'+colors[ci]+')">'+
+      '<div class="biz-banner" style="background:linear-gradient(135deg,'+GRAD_COLORS[ci]+')">'+
         '<div class="biz-logo">'+logoHtml+'</div>'+
         (b.category?'<span class="biz-cat-chip">'+esc(b.category)+'</span>':'')+
       '</div>'+
       '<div class="biz-body">'+
-        '<div class="biz-name" style="display:flex;align-items:center">'+esc(b.businessName||'Business')+openBadge+'</div>'+
-        hoursText+
-        '<div class="biz-desc" style="margin-top:6px">'+(b.description?esc(b.description):'<span style="color:var(--line)">No description provided.</span>')+'</div>'+
+        '<div class="biz-name">'+esc(b.businessName||'Business')+badge+'</div>'+
+        hours+
+        '<div class="biz-desc">'+(b.description?esc(b.description):'<span style="color:var(--line)">No description.</span>')+'</div>'+
         '<span class="order-btn">Browse &amp; Order</span>'+
       '</div>'+
     '</a>';
