@@ -139,19 +139,45 @@ footer a{color:var(--accent-soft);text-decoration:none}
   /* 6 — Hide "Businesses / N businesses" header row (not needed on mobile) */
   .section-hd { display:none }
 
-  /* 7 — Business grid: 2 compact columns */
-  .biz-grid { grid-template-columns:1fr 1fr; gap:8px }
+  /* 7 — Business grid: single column list on mobile (cards are horizontal) */
+  .biz-grid { grid-template-columns:1fr; gap:7px }
 
-  /* 8 — Compact business card */
-  .biz-banner  { height:58px }
-  .biz-logo    { width:42px; height:42px; font-size:17px; border-radius:9px; border-width:2px }
-  .biz-cat-chip{ font-size:9.5px; padding:2px 7px; top:5px; right:5px; border-radius:12px }
-  .biz-body    { padding:8px }
-  .biz-name    { font-size:13px; font-weight:700; gap:3px; margin-bottom:2px; flex-wrap:wrap }
-  .open-badge  { font-size:10px; padding:1px 7px }
-  .biz-hours   { font-size:10.5px; line-height:1.3; margin-bottom:4px }
-  .biz-desc    { font-size:11.5px; -webkit-line-clamp:1; min-height:0; margin-bottom:8px }
-  .order-btn   { padding:8px 4px; font-size:12.5px; border-radius:8px }
+  /* 8 — MOBILE card: hide banner, use horizontal avatar+info layout */
+  .biz-banner  { display:none }        /* no banner on mobile */
+  .biz-card    {
+    border-radius:12px;
+    display:grid;
+    grid-template-columns:52px 1fr;
+    grid-template-rows:1fr;
+    min-height:0;
+    overflow:hidden;
+  }
+  /* Avatar column — coloured square left side */
+  .biz-logo-mob {
+    display:flex; align-items:center; justify-content:center;
+    padding:0; width:52px; flex-shrink:0; border-radius:0;
+    font-size:20px; font-weight:800; color:#fff;
+  }
+  .biz-logo-mob img { width:100%; height:100%; object-fit:cover }
+
+  /* Info column */
+  .biz-body    {
+    padding:10px 11px 10px 10px;
+    display:flex; flex-direction:column; gap:0; min-width:0;
+  }
+  .biz-name    { font-size:13.5px; font-weight:700; gap:5px; margin-bottom:2px;
+                 display:flex; align-items:center; flex-wrap:nowrap; overflow:hidden }
+  .biz-name span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .open-badge  { font-size:10px; padding:1px 7px; flex-shrink:0 }
+  .biz-hours   { font-size:11px; color:var(--ink-soft); margin-bottom:4px; white-space:nowrap;
+                 overflow:hidden; text-overflow:ellipsis }
+  .biz-desc    { display:none }        /* hide description on mobile */
+  .biz-cat-chip{ display:none }        /* hide category chip on mobile (shown in pills) */
+  .order-btn   {
+    display:inline-block; width:auto; align-self:flex-start;
+    padding:5px 12px; font-size:12px; border-radius:8px; margin-top:auto;
+    background:var(--accent); color:#fff; font-weight:700;
+  }
 
   footer { margin-top:20px; padding:16px 12px }
 }
@@ -316,10 +342,13 @@ function renderGrid(businesses){
     var logoHtml=b.logo?'<img src="'+esc(b.logo)+'">':'<span>'+esc((b.businessName||'?')[0].toUpperCase())+'</span>';
     var ci=((b.businessName||'').charCodeAt(0)||0)%GRAD_COLORS.length;
     return '<a class="biz-card" href="'+esc(base+'order.html?b='+b.token)+'">'+
+      // Desktop banner (hidden on mobile via CSS)
       '<div class="biz-banner" style="background:linear-gradient(135deg,'+GRAD_COLORS[ci]+')">'+
         '<div class="biz-logo">'+logoHtml+'</div>'+
         (b.category?'<span class="biz-cat-chip">'+esc(b.category)+'</span>':'')+
       '</div>'+
+      // Mobile avatar column (left side, hidden on desktop)
+      '<div class="biz-logo-mob" style="background:linear-gradient(135deg,'+GRAD_COLORS[ci]+')">'+logoHtml+'</div>'+
       '<div class="biz-body">'+
         '<div class="biz-name">'+esc(b.businessName||'Business')+badge+'</div>'+
         hours+

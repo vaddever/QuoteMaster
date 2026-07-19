@@ -3894,32 +3894,46 @@ function _renderOrders() {
     ? orders
     : orders.filter(function(o){ return o.status===_ordersFilter; });
 
-  /* tabs */
-  var tabs=statusList.map(function(s){
-    var lbl=_orderStatusLabel(s);
-    var cnt=s!=='all'&&counts[s]?' ('+counts[s]+')':'';
-    return '<button class="'+(_ordersFilter===s?'active':'')+
-      '" onclick="filterOrders(\''+s+'\')">'+lbl+cnt+'</button>';
-  }).join('');
-  var tabsHtml='<div class="tabs" style="margin-bottom:14px">'+tabs+'</div>';
+  // Short labels for mobile tabs
+  var shortLabel={all:'All',pending_confirmation:'Awaiting',confirmed:'Payment Req.',
+    payment_submitted:'Paid',processing:'Processing',shipped:'Shipped',
+    delivered:'Delivered',cancelled:'Cancelled'};
 
-  /* portal link */
+  /* ── Tabs: horizontally scrollable, compact labels on mobile ──────────── */
+  var tabs=statusList.map(function(s){
+    var lbl=isMob()?shortLabel[s]:_orderStatusLabel(s);
+    var cnt=counts[s]?' ('+counts[s]+')':'';
+    return '<button class="'+(_ordersFilter===s?'active':'')+
+      '" onclick="filterOrders(\''+s+'\')" style="white-space:nowrap">'+lbl+cnt+'</button>';
+  }).join('');
+  var tabsHtml='<div class="tabs" style="overflow-x:auto;flex-wrap:nowrap;margin-bottom:12px;'+
+    '-webkit-overflow-scrolling:touch;scrollbar-width:none">'+tabs+'</div>';
+
+  /* ── Portal link card: compact on mobile ─────────────────────────────── */
   var baseUrl=location.href.split('?')[0].split('/').slice(0,-1).join('/')+'/';
   var tok=(State.db&&State.db.settings&&State.db.settings.orderToken)||'';
   var link=baseUrl+'order.html?b='+tok;
-  var portalCard=
-    '<div class="card pad" style="margin-bottom:14px;display:flex;justify-content:space-between;'+
-      'align-items:center;flex-wrap:wrap;gap:10px;border-left:3px solid var(--accent)">' +
-    '<div><b>Customer Order Portal</b>' +
-      '<div class="muted" style="font-size:12.5px">Share this link — customers can browse and place orders</div></div>' +
-    '<div class="row" style="gap:8px">' +
-      '<code style="font-size:11.5px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;' +
-        'background:var(--paper);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block">'+
-        esc(link)+'</code>' +
-      '<button class="btn ghost sm" onclick="navigator.clipboard&&navigator.clipboard.writeText(\''+link+'\')'+
-        '.then(function(){toast(\'Copied!\')})">Copy</button>' +
-      '<button class="btn accent sm" onclick="window.open(\''+link+'\',\'_blank\')">Open ↗</button>' +
-    '</div></div>';
+  var portalCard=isMob()
+    ? '<div class="card" style="margin-bottom:12px;padding:12px 13px;border-left:3px solid var(--accent)">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
+          '<b style="font-size:14px">Order Portal</b>'+
+          '<div style="display:flex;gap:6px">'+
+            '<button class="btn ghost sm" onclick="navigator.clipboard&&navigator.clipboard.writeText(\''+link+'\').then(function(){toast(\'Copied!\')})">Copy link</button>'+
+            '<button class="btn accent sm" onclick="window.open(\''+link+'\',\'_blank\')">Open ↗</button>'+
+          '</div>'+
+        '</div>'+
+        '<code style="font-size:11px;color:var(--ink-soft);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(link)+'</code>'+
+      '</div>'
+    : '<div class="card pad" style="margin-bottom:14px;display:flex;justify-content:space-between;'+
+        'align-items:center;flex-wrap:wrap;gap:10px;border-left:3px solid var(--accent)">'+
+      '<div><b>Customer Order Portal</b>'+
+        '<div class="muted" style="font-size:12.5px">Share this link — customers can browse and place orders</div></div>'+
+      '<div class="row" style="gap:8px">'+
+        '<code style="font-size:11.5px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;'+
+          'background:var(--paper);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block">'+esc(link)+'</code>'+
+        '<button class="btn ghost sm" onclick="navigator.clipboard&&navigator.clipboard.writeText(\''+link+'\').then(function(){toast(\'Copied!\')})">Copy</button>'+
+        '<button class="btn accent sm" onclick="window.open(\''+link+'\',\'_blank\')">Open ↗</button>'+
+      '</div></div>';
 
   if(!filtered.length){
     c.innerHTML=tabsHtml+portalCard+emptyBox('No orders in this category',
@@ -3928,39 +3942,85 @@ function _renderOrders() {
   }
 
   var allSt=['pending_confirmation','confirmed','payment_submitted','processing','shipped','delivered','cancelled'];
-  var rows=filtered.map(function(o){
-    var col=_orderStatusColor(o.status)||'var(--ink-soft)';
-    var lbl=_orderStatusLabel(o.status);
-    var isPend=o.status==='pending_confirmation';
-    var hasSlip=o.payment&&o.payment.slipDataUrl;
-    var ddOpts=allSt.map(function(s){
-      return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+(_orderStatusLabel(s))+'</option>';
-    }).join('');
-    return '<tr>' +
-      '<td style="font-weight:600"><span class="mono">#'+esc(o.number||o.id.slice(-6))+'</span></td>' +
-      '<td>'+fmtDate(o.date)+'</td>' +
-      '<td><b>'+esc((o.customer&&o.customer.name)||'—')+'</b>' +
-        '<div class="muted" style="font-size:12px">'+esc((o.customer&&o.customer.phone)||'')+'</div></td>' +
-      '<td>'+money((o.totals&&o.totals.total)||0)+'</td>' +
-      '<td><span class="pill" style="background:'+col+'20;color:'+col+';font-weight:700">'+esc(lbl)+'</span></td>' +
-      '<td><div style="font-size:12.5px">'+(o.payment&&o.payment.method?esc(o.payment.method):'—') +
-        (hasSlip?'&nbsp;<a class="linkish" onclick="viewOrderSlip(\''+o.id+'\')">slip</a>':'') +
-      '</div></td>' +
-      '<td><div class="rowacts">' +
-        '<button class="btn ghost tiny" onclick="openOrderDetail(\''+o.id+'\')">View</button>' +
-        (isPend
-          ? '<button class="btn accent tiny" onclick="confirmOrder(\''+o.id+'\')">&#10003; Confirm</button>'
-          : '<select style="font-size:12px;border:1px solid var(--line);border-radius:7px;padding:4px 8px"' +
-              ' onchange="updateOrderStatus(\''+o.id+'\',this.value)">'+ddOpts+'</select>') +
-      '</div></td>' +
-    '</tr>';
-  }).join('');
 
-  c.innerHTML=tabsHtml+portalCard+
-    '<div class="tbl"><table><thead><tr>' +
-      '<th>Order #</th><th>Date</th><th>Customer</th><th>Total</th>'+
-      '<th>Status</th><th>Payment</th><th></th>' +
-    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  if(isMob()){
+    /* ── MOBILE: card list ─────────────────────────────────────────────── */
+    var cards=filtered.map(function(o){
+      var col=_orderStatusColor(o.status)||'var(--ink-soft)';
+      var lbl=_orderStatusLabel(o.status);
+      var isPend=o.status==='pending_confirmation';
+      var hasSlip=o.payment&&o.payment.slipDataUrl;
+      var ddOpts=allSt.map(function(s){
+        return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+_orderStatusLabel(s)+'</option>';
+      }).join('');
+      return '<div class="card" style="padding:13px 14px;margin-bottom:10px;border-radius:13px">'+
+        // Row 1: order# + date + status pill
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'+
+          '<span style="font-weight:700;font-family:monospace;font-size:15px">#'+esc(o.number||o.id.slice(-6))+'</span>'+
+          '<div style="display:flex;align-items:center;gap:6px">'+
+            '<span class="muted" style="font-size:12px">'+fmtDate(o.date)+'</span>'+
+            '<span class="pill" style="background:'+col+'20;color:'+col+';font-weight:700;font-size:11.5px">'+esc(lbl)+'</span>'+
+          '</div>'+
+        '</div>'+
+        // Row 2: customer name + phone
+        '<div style="margin-bottom:7px">'+
+          '<div style="font-size:14px;font-weight:600">'+esc((o.customer&&o.customer.name)||'—')+'</div>'+
+          '<div class="muted" style="font-size:12.5px">'+esc((o.customer&&o.customer.phone)||'')+(o.customer&&o.customer.email?'&nbsp;·&nbsp;'+esc(o.customer.email):'')+'</div>'+
+        '</div>'+
+        // Row 3: total + payment method
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:9px">'+
+          '<span style="font-size:16px;font-weight:700;font-family:monospace">'+money((o.totals&&o.totals.total)||0)+'</span>'+
+          '<span class="muted" style="font-size:12.5px">'+
+            (o.payment&&o.payment.method?esc(o.payment.method):'No payment yet')+
+            (hasSlip?'&nbsp;<a class="linkish" onclick="viewOrderSlip(\''+o.id+'\')">slip ↗</a>':'')+
+          '</span>'+
+        '</div>'+
+        // Row 4: action buttons
+        '<div style="display:flex;gap:7px;flex-wrap:wrap">'+
+          '<button class="btn ghost sm" onclick="openOrderDetail(\''+o.id+'\')">View details</button>'+
+          (isPend
+            ? '<button class="btn accent sm" style="flex:1" onclick="confirmOrder(\''+o.id+'\')">&#10003; Confirm order</button>'
+            : '<select style="flex:1;font-size:13px;border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--paper)" onchange="updateOrderStatus(\''+o.id+'\',this.value)">'+ddOpts+'</select>')+
+        '</div>'+
+      '</div>';
+    }).join('');
+    c.innerHTML=tabsHtml+portalCard+cards;
+
+  } else {
+    /* ── DESKTOP: table ────────────────────────────────────────────────── */
+    var rows=filtered.map(function(o){
+      var col=_orderStatusColor(o.status)||'var(--ink-soft)';
+      var lbl=_orderStatusLabel(o.status);
+      var isPend=o.status==='pending_confirmation';
+      var hasSlip=o.payment&&o.payment.slipDataUrl;
+      var ddOpts=allSt.map(function(s){
+        return '<option value="'+s+'"'+(o.status===s?' selected':'')+'>'+_orderStatusLabel(s)+'</option>';
+      }).join('');
+      return '<tr>' +
+        '<td style="font-weight:600"><span class="mono">#'+esc(o.number||o.id.slice(-6))+'</span></td>' +
+        '<td>'+fmtDate(o.date)+'</td>' +
+        '<td><b>'+esc((o.customer&&o.customer.name)||'—')+'</b>' +
+          '<div class="muted" style="font-size:12px">'+esc((o.customer&&o.customer.phone)||'')+'</div></td>' +
+        '<td>'+money((o.totals&&o.totals.total)||0)+'</td>' +
+        '<td><span class="pill" style="background:'+col+'20;color:'+col+';font-weight:700">'+esc(lbl)+'</span></td>' +
+        '<td><div style="font-size:12.5px">'+(o.payment&&o.payment.method?esc(o.payment.method):'—') +
+          (hasSlip?'&nbsp;<a class="linkish" onclick="viewOrderSlip(\''+o.id+'\')">slip</a>':'') +
+        '</div></td>' +
+        '<td><div class="rowacts">' +
+          '<button class="btn ghost tiny" onclick="openOrderDetail(\''+o.id+'\')">View</button>' +
+          (isPend
+            ? '<button class="btn accent tiny" onclick="confirmOrder(\''+o.id+'\')">&#10003; Confirm</button>'
+            : '<select style="font-size:12px;border:1px solid var(--line);border-radius:7px;padding:4px 8px"' +
+                ' onchange="updateOrderStatus(\''+o.id+'\',this.value)">'+ddOpts+'</select>') +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+    c.innerHTML=tabsHtml+portalCard+
+      '<div class="tbl"><table><thead><tr>' +
+        '<th>Order #</th><th>Date</th><th>Customer</th><th>Total</th>'+
+        '<th>Status</th><th>Payment</th><th></th>' +
+      '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }
 }
 
 /* --- openOrderDetail: use cache first --------------------------------- */
